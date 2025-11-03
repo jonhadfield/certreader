@@ -62,7 +62,7 @@ overridden with a flag.
 
 ### brew
 
-- brew tap jonhadfield/certreader
+- brew tap jonhadfield/homebrew-certreader
 - brew install certreader
 
 ### go
