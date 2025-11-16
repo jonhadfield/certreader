@@ -6,6 +6,7 @@ import (
 	"encoding/asn1"
 	"encoding/hex"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -29,8 +30,22 @@ func FromX509CertificateRequests(csrs []*x509.CertificateRequest) CSRs {
 	return requests
 }
 
-// FromCSRBytes converts raw CSR bytes to CSR structures
+// FromCSRBytes converts raw CSR bytes to CSR structures. Supports PEM and DER formats.
 func FromCSRBytes(data []byte) (CSRs, error) {
+	// Try PEM first
+	csrs, err := fromCSRPEMBytes(data)
+	if err == nil {
+		return csrs, nil
+	}
+	if !errors.Is(err, errNoPEMBlock) {
+		return nil, err
+	}
+
+	// Try DER format
+	return fromCSRDERBytes(data)
+}
+
+func fromCSRPEMBytes(data []byte) (CSRs, error) {
 	var (
 		block *pem.Block
 		csrs  CSRs
@@ -51,6 +66,18 @@ func FromCSRBytes(data []byte) (CSRs, error) {
 			return csrs, nil
 		}
 	}
+}
+
+func fromCSRDERBytes(data []byte) (CSRs, error) {
+	// Try to parse as DER-encoded CSR
+	csr, err := x509.ParseCertificateRequest(data)
+	if err != nil {
+		return nil, fmt.Errorf("invalid DER CSR: %w", err)
+	}
+
+	return CSRs{
+		CSR{position: 1, x509CSR: csr},
+	}, nil
 }
 
 func fromCSRPemBlock(position int, block *pem.Block) CSR {
