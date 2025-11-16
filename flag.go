@@ -11,6 +11,7 @@ import (
 
 type Flags struct {
 	Usage       func()
+	CSR         bool
 	Expiry      bool
 	NoDuplicate bool
 	NoExpired   bool
@@ -36,6 +37,8 @@ func ParseFlags() (Flags, error) {
 
 	var flags Flags
 	flagSet := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	flagSet.BoolVar(&flags.CSR, "csr", getBoolEnv("CERTREADER_CSR", false),
+		"force CSR mode (optional - CSRs are auto-detected)")
 	flagSet.BoolVar(&flags.Expiry, "expiry", getBoolEnv("CERTREADER_EXPIRY", false),
 		"print expiry of certificates")
 	flagSet.BoolVar(&flags.NoDuplicate, "no-duplicate", getBoolEnv("CERTREADER_NO_DUPLICATE", false),
