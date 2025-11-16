@@ -21,7 +21,7 @@ GORELEASER ?= goreleaser
 GITHUB_TOKEN ?= $(shell echo $$GITHUB_TOKEN)
 GO_VERSION := 1.22-bookworm
 
-release: release-linux-amd64 release-linux-arm64 release-mac
+release: release-linux-amd64 release-linux-arm64 release-mac release-windows-amd64 release-windows-arm64
 	@echo "✅ All artifacts uploaded to the same GitHub release."
 
 # macOS (darwin/arm64) + Windows if you still want it here — adjust as needed
@@ -55,4 +55,28 @@ release-linux-arm64:
 	    set -eu ; \
 	    apt-get update && apt-get install -y --no-install-recommends libx11-dev pkg-config && \
 	    goreleaser release --clean --config .goreleaser/.goreleaser.linux-arm64.yml \
+	  '
+
+release-windows-amd64:
+	@echo "🪟 Building windows/amd64 in container (goreleaser-cross)..."
+	docker run --rm --platform=linux/amd64 \
+	  --entrypoint /bin/sh \
+	  -e GITHUB_TOKEN=$(GITHUB_TOKEN) \
+	  -v "$$(pwd)":/src -w /src ghcr.io/goreleaser/goreleaser-cross:latest \
+	  -c '\
+	    set -eu ; \
+	    apt-get update && apt-get install -y --no-install-recommends libx11-dev pkg-config && \
+	    goreleaser release --clean --config .goreleaser/.goreleaser.windows-amd64.yml \
+	  '
+
+release-windows-arm64:
+	@echo "🪟 Building windows/arm64 in container (goreleaser-cross)..."
+	docker run --rm --platform=linux/arm64 \
+	  --entrypoint /bin/sh \
+	  -e GITHUB_TOKEN=$(GITHUB_TOKEN) \
+	  -v "$$(pwd)":/src -w /src ghcr.io/goreleaser/goreleaser-cross:latest \
+	  -c '\
+	    set -eu ; \
+	    apt-get update && apt-get install -y --no-install-recommends libx11-dev pkg-config && \
+	    goreleaser release --clean --config .goreleaser/.goreleaser.windows-arm64.yml \
 	  '
