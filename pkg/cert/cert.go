@@ -189,7 +189,7 @@ func FromX509Certificates(cs []*x509.Certificate) Certificates {
 }
 
 // FromBytes converts raw certificate bytes to certificate, if the supplied data is cert bundle (or chain)
-// all the certificates will be returned
+// all the certificates will be returned. Supports PEM, DER, and PKCS12 formats.
 func FromBytes(data []byte, password string) (Certificates, error) {
 
 	data = bytes.TrimSpace(data)
@@ -197,6 +197,7 @@ func FromBytes(data []byte, password string) (Certificates, error) {
 		return nil, errNoPEMBlock
 	}
 
+	// Try PEM first
 	certificates, err := fromPEMBytes(data)
 	if err == nil {
 		return certificates, nil
@@ -204,6 +205,14 @@ func FromBytes(data []byte, password string) (Certificates, error) {
 	if !errors.Is(err, errNoPEMBlock) {
 		return nil, err
 	}
+
+	// Try DER format
+	certificates, err = fromDERBytes(data)
+	if err == nil {
+		return certificates, nil
+	}
+
+	// Try PKCS12
 	return fromPKCS12Bytes(data, password)
 }
 
@@ -228,6 +237,18 @@ func fromPEMBytes(data []byte) (Certificates, error) {
 			return certificates, nil
 		}
 	}
+}
+
+func fromDERBytes(data []byte) (Certificates, error) {
+	// Try to parse as DER-encoded certificate
+	certificate, err := x509.ParseCertificate(data)
+	if err != nil {
+		return nil, fmt.Errorf("invalid DER certificate: %w", err)
+	}
+
+	return Certificates{
+		Certificate{position: 1, x509Certificate: certificate},
+	}, nil
 }
 
 func fromPKCS12Bytes(data []byte, password string) (Certificates, error) {
