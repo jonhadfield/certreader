@@ -5,4 +5,5 @@ dist/
 .env
 AGENTS.md
 CLAUDE.md
+.claude/
 .idea/
