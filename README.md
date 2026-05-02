@@ -15,6 +15,7 @@ certreader [flags] [<file>|<host:port> ...]
 **file** argument can be:
  - **local file path** `certreader <filename>`
  - **TCP network address** `certreader <host:port>` e.g. `certreader google.com:443`
+ - **FQDN** `certreader <host>` e.g. `certreader www.example.com` (port 443 is assumed when no local file with that name exists)
  - **stdin** `echo "<cert-content>" | certreader`
 
 ```

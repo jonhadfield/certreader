@@ -166,14 +166,14 @@ func TestParseAuthorityKeyIdentifier(t *testing.T) {
 func TestExtensionsByOid(t *testing.T) {
 	t.Run("verify all registered OIDs have handlers", func(t *testing.T) {
 		expectedOIDs := []string{
-			"2.5.29.35", // Authority Key Identifier
-			"2.5.29.14", // Subject Key Identifier
-			"2.5.29.15", // Key Usage
-			"2.5.29.32", // Certificate Policies
-			"2.5.29.17", // Subject Alt Name
-			"2.5.29.19", // Basic Constraints
-			"2.5.29.37", // Extended Key Usage
-			"2.5.29.31", // CRL Distribution Points
+			"2.5.29.35",               // Authority Key Identifier
+			"2.5.29.14",               // Subject Key Identifier
+			"2.5.29.15",               // Key Usage
+			"2.5.29.32",               // Certificate Policies
+			"2.5.29.17",               // Subject Alt Name
+			"2.5.29.19",               // Basic Constraints
+			"2.5.29.37",               // Extended Key Usage
+			"2.5.29.31",               // CRL Distribution Points
 			"1.3.6.1.5.5.7.1.1",       // Authority Information Access
 			"1.3.6.1.4.1.11129.2.4.2", // CT Precertificate SCTs
 		}

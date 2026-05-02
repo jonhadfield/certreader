@@ -18,6 +18,62 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestLooksLikeFQDN(t *testing.T) {
+	t.Run("given dotted hostname, when looksLikeFQDN called, then returns true", func(t *testing.T) {
+		assert.True(t, looksLikeFQDN("www.example.com"))
+		assert.True(t, looksLikeFQDN("example.com"))
+		assert.True(t, looksLikeFQDN("a.b.c.example.org"))
+		assert.True(t, looksLikeFQDN("xn--bcher-kva.example"))
+		assert.True(t, looksLikeFQDN("example.com.")) // trailing dot allowed
+		assert.True(t, looksLikeFQDN("192.0.2.1"))    // IPv4 also matches
+	})
+
+	t.Run("given non-FQDN inputs, when looksLikeFQDN called, then returns false", func(t *testing.T) {
+		assert.False(t, looksLikeFQDN(""))
+		assert.False(t, looksLikeFQDN("localhost"))      // no dot
+		assert.False(t, looksLikeFQDN("/etc/cert.pem"))  // path
+		assert.False(t, looksLikeFQDN("./cert.pem"))     // path
+		assert.False(t, looksLikeFQDN("foo\\bar"))       // backslash
+		assert.False(t, looksLikeFQDN(".example.com"))   // leading dot
+		assert.False(t, looksLikeFQDN("example..com"))   // empty label
+		assert.False(t, looksLikeFQDN("-bad.example"))   // label starts with hyphen
+		assert.False(t, looksLikeFQDN("bad-.example"))   // label ends with hyphen
+		assert.False(t, looksLikeFQDN("under_score.io")) // underscore not valid
+	})
+}
+
+func TestLoadFromArg_FQDNFallback(t *testing.T) {
+	t.Run("given existing file, when loadFromArg called, then loads file", func(t *testing.T) {
+		tempDir := t.TempDir()
+		certPath := filepath.Join(tempDir, "cert.pem")
+		require.NoError(t, os.WriteFile(certPath, createTestCertificatePEM(t, "Test"), 0644))
+
+		location := loadFromArg(certPath, "", false, "")
+		assert.Equal(t, certPath, location.Path)
+		assert.Nil(t, location.Error)
+	})
+
+	t.Run("given missing non-FQDN path, when loadFromArg called, then returns file error", func(t *testing.T) {
+		tempDir := t.TempDir()
+		missing := filepath.Join(tempDir, "does-not-exist")
+
+		location := loadFromArg(missing, "", false, "")
+		assert.Equal(t, missing, location.Path)
+		require.NotNil(t, location.Error)
+		assert.True(t, os.IsNotExist(location.Error))
+	})
+
+	t.Run("given missing FQDN-shaped arg, when loadFromArg called, then attempts network with original arg as path", func(t *testing.T) {
+		// .invalid TLD is reserved (RFC 2606) so this won't actually connect — we only
+		// care that we attempted the network path and preserved the original arg.
+		arg := "certreader-test.invalid"
+
+		location := loadFromArg(arg, "", false, "")
+		assert.Equal(t, arg, location.Path)
+		assert.NotNil(t, location.Error, "expected network error for reserved TLD")
+	})
+}
+
 func TestIsTCPNetworkAddress(t *testing.T) {
 	t.Run("given valid host:port, when isTCPNetworkAddress called, then returns true", func(t *testing.T) {
 		assert.True(t, isTCPNetworkAddress("google.com:443"))

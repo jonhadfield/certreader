@@ -92,18 +92,18 @@ func LoadLocations(flags Flags) cert.Locations {
 }
 
 func loadFromArgs(args []string, serverName string, insecure bool, password string) cert.Locations {
-	out := make(chan cert.Location)
+	type result struct {
+		arg      string
+		location cert.Location
+	}
+	out := make(chan result)
 	go func() {
 		var wg sync.WaitGroup
 		for _, arg := range args {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				if isTCPNetworkAddress(arg) {
-					out <- cert.LoadFromNetwork(arg, serverName, insecure)
-					return
-				}
-				out <- cert.LoadFromFile(arg, password)
+				out <- result{arg: arg, location: loadFromArg(arg, serverName, insecure, password)}
 			}()
 		}
 		wg.Wait()
@@ -112,8 +112,8 @@ func loadFromArgs(args []string, serverName string, insecure bool, password stri
 
 	// load from the channel
 	locationsByArgs := make(map[string]cert.Location)
-	for location := range out {
-		locationsByArgs[location.Path] = location
+	for r := range out {
+		locationsByArgs[r.arg] = r.location
 	}
 
 	// sort by input arguments
@@ -122,6 +122,18 @@ func loadFromArgs(args []string, serverName string, insecure bool, password stri
 		locationsSortedByArgs = append(locationsSortedByArgs, locationsByArgs[arg])
 	}
 	return locationsSortedByArgs
+}
+
+func loadFromArg(arg, serverName string, insecure bool, password string) cert.Location {
+	if isTCPNetworkAddress(arg) {
+		return cert.LoadFromNetwork(arg, serverName, insecure)
+	}
+	if _, err := os.Stat(arg); err != nil && os.IsNotExist(err) && looksLikeFQDN(arg) {
+		location := cert.LoadFromNetwork(arg+":443", serverName, insecure)
+		location.Path = arg
+		return location
+	}
+	return cert.LoadFromFile(arg, password)
 }
 
 func maybePromptForPFXPasswords(locations cert.Locations, flags *Flags) cert.Locations {
@@ -243,6 +255,39 @@ func isTCPNetworkAddress(arg string) bool {
 	}
 	if _, err := strconv.Atoi(parts[1]); err != nil {
 		return false
+	}
+	return true
+}
+
+func looksLikeFQDN(s string) bool {
+	if s == "" || strings.ContainsAny(s, `/\`) || !strings.Contains(s, ".") {
+		return false
+	}
+	s = strings.TrimSuffix(s, ".")
+	for _, label := range strings.Split(s, ".") {
+		if !isDNSLabel(label) {
+			return false
+		}
+	}
+	return true
+}
+
+func isDNSLabel(label string) bool {
+	if len(label) == 0 || len(label) > 63 {
+		return false
+	}
+	if label[0] == '-' || label[len(label)-1] == '-' {
+		return false
+	}
+	for _, c := range label {
+		switch {
+		case c >= 'a' && c <= 'z':
+		case c >= 'A' && c <= 'Z':
+		case c >= '0' && c <= '9':
+		case c == '-':
+		default:
+			return false
+		}
 	}
 	return true
 }
