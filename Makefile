@@ -27,7 +27,7 @@ release: release-linux-amd64 release-linux-arm64 release-mac release-windows-amd
 # macOS (darwin/arm64) + Windows if you still want it here — adjust as needed
 release-mac:
 	@echo "🚀 Releasing darwin/arm64 on host..."
-	$(GORELEASER) release --clean --config .goreleaser/.goreleaser.darwin.yml
+	env -u GITLAB_TOKEN -u GITEA_TOKEN $(GORELEASER) release --clean --config .goreleaser/.goreleaser.darwin.yml
 
 ifndef GITHUB_TOKEN
 $(error GITHUB_TOKEN is not set. Run: export GITHUB_TOKEN=<your PAT with repo scope>)
@@ -41,6 +41,7 @@ release-linux-amd64:
 	  -v "$$(pwd)":/src -w /src ghcr.io/goreleaser/goreleaser-cross:latest \
 	  -c '\
 	    set -eu ; \
+	    git config --global --add safe.directory /src ; \
 	    apt-get update && apt-get install -y --no-install-recommends libx11-dev pkg-config && \
 	    goreleaser release --clean --config .goreleaser/.goreleaser.linux-amd64.yml \
 	  '
@@ -53,6 +54,7 @@ release-linux-arm64:
 	  -v "$$(pwd)":/src -w /src ghcr.io/goreleaser/goreleaser-cross:latest \
 	  -c '\
 	    set -eu ; \
+	    git config --global --add safe.directory /src ; \
 	    apt-get update && apt-get install -y --no-install-recommends libx11-dev pkg-config && \
 	    goreleaser release --clean --config .goreleaser/.goreleaser.linux-arm64.yml \
 	  '
@@ -65,6 +67,7 @@ release-windows-amd64:
 	  -v "$$(pwd)":/src -w /src ghcr.io/goreleaser/goreleaser-cross:latest \
 	  -c '\
 	    set -eu ; \
+	    git config --global --add safe.directory /src ; \
 	    apt-get update && apt-get install -y --no-install-recommends libx11-dev pkg-config && \
 	    goreleaser release --clean --config .goreleaser/.goreleaser.windows-amd64.yml \
 	  '
@@ -77,6 +80,7 @@ release-windows-arm64:
 	  -v "$$(pwd)":/src -w /src ghcr.io/goreleaser/goreleaser-cross:latest \
 	  -c '\
 	    set -eu ; \
+	    git config --global --add safe.directory /src ; \
 	    apt-get update && apt-get install -y --no-install-recommends libx11-dev pkg-config && \
 	    goreleaser release --clean --config .goreleaser/.goreleaser.windows-arm64.yml \
 	  '
