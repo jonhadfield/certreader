@@ -23,6 +23,7 @@ func LocationsUnified(locations []cert.Location, printChains, printPem, printExt
 			printCSRs(location.CSRs, printPem, printExtensions, printSignature)
 		} else if location.IsCertificate() {
 			printCertificates(location.Certificates, printPem, printExtensions, printSignature)
+			printStapledOCSP(location)
 
 			if printChains {
 				chains, err := location.Chains()
@@ -120,4 +121,47 @@ func ExpiryUnified(locations []cert.Location) {
 			fmt.Printf("%s: CSR (no expiry)\n", location.Name())
 		}
 	}
+}
+
+// printStapledOCSP prints the revocation status a TLS server volunteered during
+// the handshake. Nothing is printed for locations without a stapled response.
+func printStapledOCSP(location cert.Location) {
+	if !location.HasOCSPStaple() {
+		return
+	}
+
+	staple, err := location.StapledOCSP()
+	if err != nil {
+		slog.Error(fmt.Sprintf("stapled OCSP for %s: %v", location.Name(), err))
+		fmt.Printf("%s: %v\n\n", AttributeName("OCSP Staple"), err)
+		return
+	}
+
+	fmt.Printf("%s\n", AttributeName("OCSP Staple"))
+	fmt.Printf("    %s: %s\n", SubAttributeName("Status"), OCSPStatus(staple.Status))
+	if staple.SerialNumber != "" {
+		fmt.Printf("    %s: %s\n", SubAttributeName("Serial Number"), staple.SerialNumber)
+	}
+	if staple.IsRevoked() {
+		fmt.Printf("    %s: %s\n", SubAttributeName("Revoked At"), validityFormat(staple.RevokedAt))
+		fmt.Printf("    %s: %s\n", SubAttributeName("Reason"), staple.RevocationReason)
+	}
+	fmt.Printf("    %s: %s\n", SubAttributeName("Produced At"), validityFormat(staple.ProducedAt))
+	fmt.Printf("    %s: %s\n", SubAttributeName("This Update"), validityFormat(staple.ThisUpdate))
+	if !staple.NextUpdate.IsZero() {
+		nextUpdate := validityFormat(staple.NextUpdate)
+		if staple.IsStale() {
+			nextUpdate = ExpiryStatus(true, nextUpdate+" [stale]")
+		}
+		fmt.Printf("    %s: %s\n", SubAttributeName("Next Update"), nextUpdate)
+	}
+	fmt.Printf("    %s: %s\n", SubAttributeName("Signature"), stapleSignature(staple))
+	fmt.Println()
+}
+
+func stapleSignature(staple *cert.StapledOCSP) string {
+	if staple.SignatureVerified {
+		return "verified against issuer"
+	}
+	return "not verified (issuer certificate unavailable)"
 }
