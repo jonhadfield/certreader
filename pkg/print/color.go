@@ -76,3 +76,18 @@ func ExpiryMessage(daysRemaining int, message string) string {
 	}
 	return validDateColor(message)
 }
+
+// OCSPStatus colorizes an OCSP responder verdict
+// Green: good
+// Red: revoked
+// Yellow/Orange: unknown or unrecognised
+func OCSPStatus(status string) string {
+	switch status {
+	case "good":
+		return validDateColor(status)
+	case "revoked":
+		return expiredLabelColor(status)
+	default:
+		return expiringDateColor(status)
+	}
+}

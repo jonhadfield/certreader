@@ -46,6 +46,32 @@ When a PKCS#12/PFX input requires a password and no `--pfx-password` value is su
 terminal; set the flag or `CERTREADER_PFX_PASSWORD` for non-interactive usage.
 ```
 
+## OCSP stapling
+
+When reading from a network host, `certreader` prints the OCSP response the server stapled to the TLS handshake, if it
+sent one. This is the revocation status the server volunteered — no request is made to the CA's responder, so it costs
+no extra connection and works the same as any other output.
+
+```shell script
+certreader www.digicert.com
+```
+
+```
+OCSP Staple
+    Status: good
+    Serial Number: 08:06:62:87:89:15:B4:2A:0E:4D:C6:1A:4D:AE:DF:EA
+    Produced At: Aug 24 11:13:27 2026 UTC
+    This Update: Aug 24 10:57:00 2026 UTC
+    Next Update: Aug 31 09:57:00 2026 UTC
+    Signature: verified against issuer
+```
+
+The signature is checked against the issuer certificate the server presented. If the issuer is not available the status
+is shown but reported as `not verified`, and a response that is past its `Next Update` is marked `[stale]`. Nothing is
+printed for hosts that do not staple, or for file, stdin and clipboard input. Note that a stapled response cannot tell
+you a certificate is valid when the server chooses not to staple one — absence of the block is not evidence of
+anything.
+
 If you need to run against multiple hosts, it is faster to execute command with multiple arguments e.g.
 `certreader -insecure -expiry google.com:443 amazon.com:443 ...` rather than executing command multiple times. Args are
 executed concurrently and much faster.

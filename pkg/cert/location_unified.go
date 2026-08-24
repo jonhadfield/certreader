@@ -31,6 +31,9 @@ type Location struct {
 	ContentType  ContentType
 	Certificates Certificates
 	CSRs         CSRs
+	// OCSPStaple is the raw OCSP response the TLS server stapled to the
+	// handshake, if any. Only applicable for network certificates.
+	OCSPStaple []byte
 }
 
 func (l Location) Name() string {
@@ -165,6 +168,50 @@ func (l Location) Chains() ([]Certificates, error) {
 	return verifiedChains, nil
 }
 
+// HasOCSPStaple reports whether the server stapled an OCSP response to the
+// handshake. It is always false for non-network locations.
+func (l Location) HasOCSPStaple() bool {
+	return len(l.OCSPStaple) > 0
+}
+
+// StapledOCSP parses the OCSP response the server stapled to the handshake,
+// verifying it against the issuer certificate when one was presented. It
+// returns ErrNoOCSPStaple when nothing was stapled.
+func (l Location) StapledOCSP() (*StapledOCSP, error) {
+	leaf, issuer := l.leafAndIssuer()
+	return ParseStapledOCSP(l.OCSPStaple, leaf, issuer)
+}
+
+// leafAndIssuer returns the end-entity certificate a staple would cover and the
+// presented certificate that signed it. Either may be nil, because filtering
+// flags can remove certificates from the location before it is printed.
+func (l Location) leafAndIssuer() (leaf, issuer *x509.Certificate) {
+	for i := range l.Certificates {
+		candidate := l.Certificates[i].x509Certificate
+		if candidate == nil || l.Certificates[i].Error() != nil {
+			continue
+		}
+		if l.Certificates[i].Type() == "end-entity" {
+			leaf = candidate
+			break
+		}
+	}
+	if leaf == nil {
+		return nil, nil
+	}
+
+	for i := range l.Certificates {
+		candidate := l.Certificates[i].x509Certificate
+		if candidate == nil || candidate.Equal(leaf) {
+			continue
+		}
+		if leaf.CheckSignatureFrom(candidate) == nil {
+			return leaf, candidate
+		}
+	}
+	return leaf, nil
+}
+
 // LoadFromNetwork loads certificates from a network address
 func LoadFromNetwork(addr string, serverName string, tlsSkipVerify bool) Location {
 	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: tlsDialTimeout}, "tcp", addr, &tls.Config{
@@ -184,6 +231,7 @@ func LoadFromNetwork(addr string, serverName string, tlsSkipVerify bool) Locatio
 		Path:         addr,
 		ContentType:  ContentTypeCertificate,
 		Certificates: FromX509Certificates(x509Certificates),
+		OCSPStaple:   connectionState.OCSPResponse,
 	}
 }
 
