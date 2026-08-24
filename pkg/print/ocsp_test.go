@@ -188,7 +188,7 @@ func Test_printStapledOCSP(t *testing.T) {
 		output := captureStdout(t, func() { printStapledOCSP(chain.location([]byte("garbage"), true)) })
 
 		assert.Contains(t, output, "OCSP Staple")
-		assert.Contains(t, output, "parse stapled OCSP response")
+		assert.Contains(t, output, "parse OCSP response")
 	})
 }
 
@@ -205,9 +205,9 @@ func TestLocationsUnifiedPrintsStaple(t *testing.T) {
 	assert.Contains(t, output, "good")
 }
 
-func Test_stapleSignature(t *testing.T) {
-	assert.Equal(t, "verified against issuer", stapleSignature(&cert.StapledOCSP{SignatureVerified: true}))
-	assert.Equal(t, "not verified (issuer certificate unavailable)", stapleSignature(&cert.StapledOCSP{}))
+func Test_signatureStatus(t *testing.T) {
+	assert.Equal(t, "verified against issuer", signatureStatus(true))
+	assert.Equal(t, "not verified (issuer certificate unavailable)", signatureStatus(false))
 }
 
 func TestOCSPStatus(t *testing.T) {

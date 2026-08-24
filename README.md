@@ -33,6 +33,7 @@ certreader [flags] [<file>|<host:port> ...]
 | -pem          | whether to print pem as well                                                                      |
 | -pem-only     | whether to print only pem (useful for downloading certs from host)                                |
 | -pfx-password | password used when parsing PKCS#12/PFX bundles; leave empty for passwordless files                |
+| -revocation   | check revocation status via OCSP, falling back to CRL (makes network requests)                    |
 | -server-name  | verify the hostname on the returned certificates, useful for testing SNI                          |
 | -signature    | whether to print signature                                                                        |
 | -sort-expiry  | sort certificates by expiration date                                                              |
@@ -46,15 +47,11 @@ When a PKCS#12/PFX input requires a password and no `--pfx-password` value is su
 terminal; set the flag or `CERTREADER_PFX_PASSWORD` for non-interactive usage.
 ```
 
-## OCSP stapling
+## revocation
 
-When reading from a network host, `certreader` prints the OCSP response the server stapled to the TLS handshake, if it
-sent one. This is the revocation status the server volunteered — no request is made to the CA's responder, so it costs
-no extra connection and works the same as any other output.
-
-```shell script
-certreader www.digicert.com
-```
+By default, when reading from a network host, `certreader` prints the OCSP response the server stapled to the TLS
+handshake, if it sent one. This is the revocation status the server volunteered — no request is made to the CA, so it
+costs no extra connection.
 
 ```
 OCSP Staple
@@ -66,11 +63,47 @@ OCSP Staple
     Signature: verified against issuer
 ```
 
-The signature is checked against the issuer certificate the server presented. If the issuer is not available the status
-is shown but reported as `not verified`, and a response that is past its `Next Update` is marked `[stale]`. Nothing is
-printed for hosts that do not staple, or for file, stdin and clipboard input. Note that a stapled response cannot tell
-you a certificate is valid when the server chooses not to staple one — absence of the block is not evidence of
-anything.
+`-revocation` goes further and actively determines the status, using the first source that answers:
+
+1. the stapled response, when there is one and it has not expired — no request needed
+2. the OCSP responders named in the certificate's authority information access extension
+3. the certificate's CRL distribution points
+
+```shell script
+certreader -revocation revoked.badssl.com
+```
+
+```
+Revocation
+    Status: revoked
+    Source: CRL (http://ye1.c.lencr.org/34.crl)
+    Serial Number: 05:C3:91:E0:61:DE:65:88:F6:70:B6:13:F0:61:AE:F4:B3:A1
+    Revoked At: Jul 14 21:01:28 2026 UTC
+    Reason: key compromise
+    This Update: Aug 24 16:42:41 2026 UTC
+    Next Update: Sep  2 16:42:40 2026 UTC
+    Signature: verified against issuer
+    Not Answered
+        OCSP responder: certificate names no OCSP responder
+```
+
+`Source` names where the verdict came from, and `Not Answered` lists the sources that were consulted first without
+producing one. The CRL fallback matters in practice: several CAs, Let's Encrypt and Google among them, no longer publish
+OCSP responder URLs at all.
+
+Responses and lists are verified against the issuing CA. When the issuer is not available the OCSP step is skipped, as
+no request can be built without it, and any CRL verdict is reported as `not verified`. A verdict past its `Next Update`
+is marked `[stale]`.
+
+### interpreting the result
+
+A status of `unknown` means no source could be reached or trusted — it is not the same as the certificate being valid,
+and neither is the absence of a stapled response. Only `revoked` is a firm answer; treat `good` as "no source said
+otherwise at the time it was checked".
+
+Requests honour `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`. Each request is bounded by a 10 second timeout, the whole
+check by 30 seconds, and response bodies by 32MB. Revocation is checked only for the default output, not for `-expiry`
+or `-pem-only`.
 
 If you need to run against multiple hosts, it is faster to execute command with multiple arguments e.g.
 `certreader -insecure -expiry google.com:443 amazon.com:443 ...` rather than executing command multiple times. Args are

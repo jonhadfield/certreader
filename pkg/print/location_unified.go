@@ -23,7 +23,7 @@ func LocationsUnified(locations []cert.Location, printChains, printPem, printExt
 			printCSRs(location.CSRs, printPem, printExtensions, printSignature)
 		} else if location.IsCertificate() {
 			printCertificates(location.Certificates, printPem, printExtensions, printSignature)
-			printStapledOCSP(location)
+			printRevocation(location)
 
 			if printChains {
 				chains, err := location.Chains()
@@ -123,6 +123,62 @@ func ExpiryUnified(locations []cert.Location) {
 	}
 }
 
+// printRevocation prints the outcome of a revocation check when one was
+// requested, and otherwise falls back to whatever the server stapled.
+func printRevocation(location cert.Location) {
+	if location.Revocation == nil {
+		printStapledOCSP(location)
+		return
+	}
+
+	status := location.Revocation
+
+	fmt.Printf("%s\n", AttributeName("Revocation"))
+	fmt.Printf("    %s: %s\n", SubAttributeName("Status"), OCSPStatus(status.Status))
+	if status.Source != "" {
+		fmt.Printf("    %s: %s\n", SubAttributeName("Source"), revocationSource(status))
+	}
+	if status.SerialNumber != "" {
+		fmt.Printf("    %s: %s\n", SubAttributeName("Serial Number"), status.SerialNumber)
+	}
+	if status.IsRevoked() {
+		fmt.Printf("    %s: %s\n", SubAttributeName("Revoked At"), validityFormat(status.RevokedAt))
+		fmt.Printf("    %s: %s\n", SubAttributeName("Reason"), status.RevocationReason)
+	}
+	if !status.ProducedAt.IsZero() {
+		fmt.Printf("    %s: %s\n", SubAttributeName("Produced At"), validityFormat(status.ProducedAt))
+	}
+	if !status.ThisUpdate.IsZero() {
+		fmt.Printf("    %s: %s\n", SubAttributeName("This Update"), validityFormat(status.ThisUpdate))
+	}
+	if !status.NextUpdate.IsZero() {
+		nextUpdate := validityFormat(status.NextUpdate)
+		if status.IsStale() {
+			nextUpdate = ExpiryStatus(true, nextUpdate+" [stale]")
+		}
+		fmt.Printf("    %s: %s\n", SubAttributeName("Next Update"), nextUpdate)
+	}
+	if status.Source != "" {
+		fmt.Printf("    %s: %s\n", SubAttributeName("Signature"), signatureStatus(status.SignatureVerified))
+	}
+	if len(status.Attempts) > 0 {
+		fmt.Printf("    %s\n", SubAttributeName("Not Answered"))
+		for _, attempt := range status.Attempts {
+			fmt.Printf("        %s\n", attempt)
+		}
+	}
+	fmt.Println()
+}
+
+// revocationSource names where a verdict came from, with the endpoint when the
+// answer required a request.
+func revocationSource(status *cert.RevocationStatus) string {
+	if status.URL == "" {
+		return string(status.Source)
+	}
+	return fmt.Sprintf("%s (%s)", status.Source, status.URL)
+}
+
 // printStapledOCSP prints the revocation status a TLS server volunteered during
 // the handshake. Nothing is printed for locations without a stapled response.
 func printStapledOCSP(location cert.Location) {
@@ -155,12 +211,14 @@ func printStapledOCSP(location cert.Location) {
 		}
 		fmt.Printf("    %s: %s\n", SubAttributeName("Next Update"), nextUpdate)
 	}
-	fmt.Printf("    %s: %s\n", SubAttributeName("Signature"), stapleSignature(staple))
+	fmt.Printf("    %s: %s\n", SubAttributeName("Signature"), signatureStatus(staple.SignatureVerified))
 	fmt.Println()
 }
 
-func stapleSignature(staple *cert.StapledOCSP) string {
-	if staple.SignatureVerified {
+// signatureStatus describes whether a response was authenticated against the
+// issuing CA.
+func signatureStatus(verified bool) string {
+	if verified {
 		return "verified against issuer"
 	}
 	return "not verified (issuer certificate unavailable)"
