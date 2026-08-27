@@ -34,6 +34,9 @@ type Location struct {
 	// OCSPStaple is the raw OCSP response the TLS server stapled to the
 	// handshake, if any. Only applicable for network certificates.
 	OCSPStaple []byte
+	// Revocation is the outcome of a revocation check, populated only when one
+	// was requested.
+	Revocation *RevocationStatus
 }
 
 func (l Location) Name() string {

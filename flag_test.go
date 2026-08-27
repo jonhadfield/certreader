@@ -19,6 +19,7 @@ func TestParseFlags(t *testing.T) {
 
 		assert.False(t, flags.Expiry)
 		assert.False(t, flags.Insecure)
+		assert.False(t, flags.Revocation)
 		assert.False(t, flags.Chains)
 		assert.False(t, flags.Pem)
 		assert.False(t, flags.PemOnly)
@@ -31,6 +32,7 @@ func TestParseFlags(t *testing.T) {
 		setInput(t, []string{"flag",
 			"-expiry=true",
 			"-insecure=true",
+			"-revocation=true",
 			"-chains=true",
 			"-chains=true",
 			"-pem=true",
@@ -43,6 +45,7 @@ func TestParseFlags(t *testing.T) {
 
 		assert.True(t, flags.Expiry)
 		assert.True(t, flags.Insecure)
+		assert.True(t, flags.Revocation)
 		assert.True(t, flags.Chains)
 		assert.True(t, flags.Pem)
 		assert.True(t, flags.PemOnly)
@@ -53,12 +56,13 @@ func TestParseFlags(t *testing.T) {
 	t.Run("given args are not set and env vars are set then flags are set to provided env vars", func(t *testing.T) {
 
 		setInput(t, []string{"flag"}, map[string]string{
-			"CERTREADER_EXPIRY":   "true",
-			"CERTREADER_INSECURE": "true",
-			"CERTREADER_CHAINS":   "true",
-			"CERTREADER_PEM":      "true",
-			"CERTREADER_PEM_ONLY": "true",
-			"CERTREADER_VERSION":  "true",
+			"CERTREADER_EXPIRY":     "true",
+			"CERTREADER_INSECURE":   "true",
+			"CERTREADER_REVOCATION": "true",
+			"CERTREADER_CHAINS":     "true",
+			"CERTREADER_PEM":        "true",
+			"CERTREADER_PEM_ONLY":   "true",
+			"CERTREADER_VERSION":    "true",
 		})
 
 		flags, err := ParseFlags()
@@ -66,6 +70,7 @@ func TestParseFlags(t *testing.T) {
 
 		assert.True(t, flags.Expiry)
 		assert.True(t, flags.Insecure)
+		assert.True(t, flags.Revocation)
 		assert.True(t, flags.Chains)
 		assert.True(t, flags.Pem)
 		assert.True(t, flags.PemOnly)
@@ -77,15 +82,17 @@ func TestParseFlags(t *testing.T) {
 
 		setInput(t, []string{"flag",
 			"-insecure=true",
+			"-revocation=false",
 			"-chains=true",
 			"-pem=false",
 			"-version=false",
 		}, map[string]string{
-			"CERTREADER_EXPIRY":   "true",
-			"CERTREADER_CHAINS":   "true",
-			"CERTREADER_PEM":      "true",
-			"CERTREADER_PEM_ONLY": "true",
-			"CERTREADER_VERSION":  "true",
+			"CERTREADER_EXPIRY":     "true",
+			"CERTREADER_REVOCATION": "true",
+			"CERTREADER_CHAINS":     "true",
+			"CERTREADER_PEM":        "true",
+			"CERTREADER_PEM_ONLY":   "true",
+			"CERTREADER_VERSION":    "true",
 		})
 
 		flags, err := ParseFlags()
@@ -93,6 +100,7 @@ func TestParseFlags(t *testing.T) {
 
 		assert.True(t, flags.Expiry)
 		assert.True(t, flags.Insecure)
+		assert.False(t, flags.Revocation, "flag overrides env")
 		assert.True(t, flags.Chains)
 		assert.False(t, flags.Pem)
 		assert.True(t, flags.PemOnly)

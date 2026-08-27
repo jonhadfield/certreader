@@ -65,10 +65,16 @@ func ParseStapledOCSP(raw []byte, leaf, issuer *x509.Certificate) (*StapledOCSP,
 	if len(raw) == 0 {
 		return nil, ErrNoOCSPStaple
 	}
+	return parseOCSPResponse(raw, leaf, issuer)
+}
+
+// parseOCSPResponse decodes an OCSP response, whether it arrived stapled to a
+// handshake or as the reply from a responder.
+func parseOCSPResponse(raw []byte, leaf, issuer *x509.Certificate) (*StapledOCSP, error) {
 
 	response, err := ocsp.ParseResponseForCert(raw, leaf, issuer)
 	if err != nil {
-		return nil, fmt.Errorf("parse stapled OCSP response: %w", err)
+		return nil, fmt.Errorf("parse OCSP response: %w", err)
 	}
 
 	out := &StapledOCSP{
@@ -83,7 +89,7 @@ func ParseStapledOCSP(raw []byte, leaf, issuer *x509.Certificate) (*StapledOCSP,
 	}
 	if response.Status == ocsp.Revoked {
 		out.RevokedAt = response.RevokedAt
-		out.RevocationReason = ocspRevocationReason(response.RevocationReason)
+		out.RevocationReason = revocationReasonName(response.RevocationReason)
 	}
 	return out, nil
 }
@@ -101,7 +107,9 @@ func ocspStatus(in int) string {
 	}
 }
 
-func ocspRevocationReason(in int) string {
+// revocationReasonName renders an X.509 CRLReason code, which OCSP responses
+// and CRL entries share.
+func revocationReasonName(in int) string {
 	switch in {
 	case ocsp.Unspecified:
 		return "unspecified"

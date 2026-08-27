@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/jonhadfield/certreader/pkg/cert"
@@ -10,11 +11,16 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/term"
 )
 
 var Version = "dev"
+
+// revocationTimeout bounds the whole revocation check, however many locations
+// and sources it has to consult.
+const revocationTimeout = 30 * time.Second
 
 func main() {
 
@@ -53,6 +59,11 @@ func main() {
 	if flags.PemOnly {
 		print.PemUnified(locations, flags.Chains)
 		return
+	}
+	if flags.Revocation {
+		ctx, cancel := context.WithTimeout(context.Background(), revocationTimeout)
+		defer cancel()
+		locations = locations.CheckRevocation(ctx, nil)
 	}
 	print.LocationsUnified(locations, flags.Chains, flags.Pem, flags.Extensions, flags.Signature)
 }

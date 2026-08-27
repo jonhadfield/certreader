@@ -20,6 +20,7 @@ type Flags struct {
 	IssuerLike  string
 	ServerName  string
 	Insecure    bool
+	Revocation  bool
 	Chains      bool
 	Extensions  bool
 	Signature   bool
@@ -55,6 +56,8 @@ func ParseFlags() (Flags, error) {
 		"verify the hostname on the returned certificates, useful for testing SNI")
 	flagSet.BoolVar(&flags.Insecure, "insecure", getBoolEnv("CERTREADER_INSECURE", false),
 		"whether a client verifies the server's certificate chain and host name (only applicable for host)")
+	flagSet.BoolVar(&flags.Revocation, "revocation", getBoolEnv("CERTREADER_REVOCATION", false),
+		"check revocation status via OCSP, falling back to CRL (makes network requests)")
 	flagSet.BoolVar(&flags.Chains, "chains", getBoolEnv("CERTREADER_CHAINS", false),
 		"whether to print verified chains as well (only applicable for host)")
 	flagSet.BoolVar(&flags.Extensions, "extensions", getBoolEnv("CERTREADER_EXTENSIONS", false),

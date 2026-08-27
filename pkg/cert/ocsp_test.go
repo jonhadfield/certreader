@@ -29,7 +29,7 @@ type ocspTestChain struct {
 
 // newOCSPTestChain builds a throwaway CA and end-entity certificate so that
 // stapled responses can be created and verified without network access.
-func newOCSPTestChain(t *testing.T) ocspTestChain {
+func newOCSPTestChain(t *testing.T, leafOpts ...func(*x509.Certificate)) ocspTestChain {
 	t.Helper()
 
 	issuerKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -43,7 +43,7 @@ func newOCSPTestChain(t *testing.T) ocspTestChain {
 		SubjectKeyId:          []byte{1, 2, 3, 4},
 		NotBefore:             time.Now().Add(-time.Hour),
 		NotAfter:              time.Now().Add(24 * time.Hour),
-		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign | x509.KeyUsageDigitalSignature,
 		BasicConstraintsValid: true,
 		IsCA:                  true,
 	}
@@ -64,6 +64,10 @@ func newOCSPTestChain(t *testing.T) ocspTestChain {
 		NotAfter:     time.Now().Add(24 * time.Hour),
 		KeyUsage:     x509.KeyUsageDigitalSignature,
 	}
+	for _, opt := range leafOpts {
+		opt(leafTemplate)
+	}
+
 	leafDER, err := x509.CreateCertificate(rand.Reader, leafTemplate, issuer, leafKey.Public(), issuerKey)
 	require.NoError(t, err)
 	leaf, err := x509.ParseCertificate(leafDER)
@@ -156,7 +160,7 @@ func TestParseStapledOCSP(t *testing.T) {
 
 		_, err := ParseStapledOCSP(raw, chain.leaf, other.issuer)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "parse stapled OCSP response")
+		assert.Contains(t, err.Error(), "parse OCSP response")
 	})
 
 	t.Run("given a response for another certificate then it is rejected", func(t *testing.T) {
@@ -220,7 +224,7 @@ func Test_ocspStatus(t *testing.T) {
 	}
 }
 
-func Test_ocspRevocationReason(t *testing.T) {
+func Test_revocationReasonName(t *testing.T) {
 	tests := []struct {
 		in       int
 		expected string
@@ -238,7 +242,7 @@ func Test_ocspRevocationReason(t *testing.T) {
 		{7, "unrecognised (7)"},
 	}
 	for _, test := range tests {
-		assert.Equal(t, test.expected, ocspRevocationReason(test.in))
+		assert.Equal(t, test.expected, revocationReasonName(test.in))
 	}
 }
 
