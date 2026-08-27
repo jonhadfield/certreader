@@ -21,7 +21,9 @@ jobs:
         name: setup go
         uses: actions/setup-go@v5
         with:
-          go-version:  ${{ inputs.go-version }}
+          # inputs is empty for a push trigger, so this pinned nothing and CI
+          # silently used whatever go the runner shipped
+          go-version-file: go.mod
       -
         name: go version
         run: go version
