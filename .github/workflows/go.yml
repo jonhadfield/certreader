@@ -3,7 +3,9 @@ name: go
 on:
   push:
     branches:
-      - '*'
+      # '*' does not match branch names containing a slash, so feature/* pushes
+      # were silently skipping this workflow entirely
+      - '**'
 
 jobs:
   test:
