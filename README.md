@@ -131,8 +131,29 @@ overridden with a flag.
 
 ## release
 
-Releases are published when the new tag is created e.g.
-`git tag -m "add super cool feature" v1.0.0 && git push --follow-tags`
+Releases are built and published with [GoReleaser](https://goreleaser.com) from a tagged commit.
+There is no release workflow in CI, so pushing a tag does not publish anything on its own — the
+`release` make target does the work, and needs Docker and a clean working tree.
+
+Tag the commit and push the tag:
+
+```shell script
+git tag -a -m "add super cool feature" v1.0.0
+git push --follow-tags
+```
+
+Then build and upload the artifacts:
+
+```shell script
+GITHUB_TOKEN=$(gh auth token) make release
+```
+
+`GITHUB_TOKEN` needs `repo` scope. It publishes the GitHub release and pushes the updated cask to
+`jonhadfield/homebrew-certreader`, so the token has to be able to write to both repositories.
+
+The target builds darwin on the host and linux/windows inside `goreleaser-cross` containers, running
+`goreleaser` once per platform against the same release, using the configs in `.goreleaser/`.
+Individual platforms can be built on their own, e.g. `make release-mac` or `make release-linux-arm64`.
 
 ## examples
 
