@@ -1,10 +1,13 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
+	"time"
 
 	"golang.design/x/clipboard"
 )
@@ -18,21 +21,25 @@ type Flags struct {
 	SortExpiry  bool
 	SubjectLike string
 	IssuerLike  string
-	ServerName  string
-	Insecure    bool
-	Revocation  bool
-	Chains      bool
-	Extensions  bool
-	Signature   bool
-	Pem         bool
-	PemOnly     bool
-	JSON        bool
-	Verbose     bool
-	Version     bool
-	More        bool
-	Clipboard   bool
-	PfxPassword string
-	Args        []string
+	// ExpiringWithin is the raw flag value; empty means the check is off, so
+	// that a window of zero stays meaningful as "already expired".
+	ExpiringWithin string
+	ExpiringWindow time.Duration
+	ServerName     string
+	Insecure       bool
+	Revocation     bool
+	Chains         bool
+	Extensions     bool
+	Signature      bool
+	Pem            bool
+	PemOnly        bool
+	JSON           bool
+	Verbose        bool
+	Version        bool
+	More           bool
+	Clipboard      bool
+	PfxPassword    string
+	Args           []string
 }
 
 func ParseFlags() (Flags, error) {
@@ -53,6 +60,8 @@ func ParseFlags() (Flags, error) {
 		"print certificates with issuer field containing supplied string")
 	flagSet.StringVar(&flags.IssuerLike, "issuer-like", getStringEnv("CERTREADER_ISSUER_LIKE", ""),
 		"print certificates with subject field containing supplied string")
+	flagSet.StringVar(&flags.ExpiringWithin, "expiring-within", getStringEnv("CERTREADER_EXPIRING_WITHIN", ""),
+		"exit non-zero if any certificate expires within this window, e.g. 30d, 2w, 72h")
 	flagSet.StringVar(&flags.ServerName, "server-name", getStringEnv("CERTREADER_SERVER_NAME", ""),
 		"verify the hostname on the returned certificates, useful for testing SNI")
 	flagSet.BoolVar(&flags.Insecure, "insecure", getBoolEnv("CERTREADER_INSECURE", false),
@@ -94,6 +103,14 @@ func ParseFlags() (Flags, error) {
 	}
 	flags.Args = flagSet.Args()
 
+	if flags.ExpiringWithin != "" {
+		window, err := parseExpiryWindow(flags.ExpiringWithin)
+		if err != nil {
+			return Flags{}, fmt.Errorf("-expiring-within: %w", err)
+		}
+		flags.ExpiringWindow = window
+	}
+
 	// Combination of flags
 	if flags.More {
 		flags.Pem = true
@@ -132,4 +149,43 @@ func isClipboardSupported() (ok bool) {
 		}
 	}()
 	return clipboard.Init() == nil
+}
+
+// parseExpiryWindow accepts go duration syntax, plus the day and week suffixes
+// that certificate lifetimes are actually discussed in. A window of zero is
+// valid and means "already expired".
+func parseExpiryWindow(in string) (time.Duration, error) {
+
+	in = strings.TrimSpace(in)
+	if in == "" {
+		return 0, errors.New("no duration given")
+	}
+
+	unit := time.Duration(0)
+	switch in[len(in)-1] {
+	case 'd':
+		unit = 24 * time.Hour
+	case 'w':
+		unit = 7 * 24 * time.Hour
+	}
+
+	var window time.Duration
+	if unit == 0 {
+		parsed, err := time.ParseDuration(in)
+		if err != nil {
+			return 0, fmt.Errorf("%q is not a duration, expected something like 30d, 2w or 72h", in)
+		}
+		window = parsed
+	} else {
+		value, err := strconv.ParseFloat(in[:len(in)-1], 64)
+		if err != nil {
+			return 0, fmt.Errorf("%q is not a duration, expected something like 30d, 2w or 72h", in)
+		}
+		window = time.Duration(value * float64(unit))
+	}
+
+	if window < 0 {
+		return 0, fmt.Errorf("%q is negative", in)
+	}
+	return window, nil
 }

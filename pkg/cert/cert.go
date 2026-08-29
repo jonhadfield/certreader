@@ -21,6 +21,8 @@ const certificateBlockType = "CERTIFICATE"
 
 var (
 	errNoPEMBlock          = errors.New("cannot find any PEM block")
+	errNoCertificate       = errors.New("no certificate")
+	errNoCertificateReq    = errors.New("no certificate request")
 	ErrPFXPasswordRequired = errors.New("pkcs12: password required")
 )
 
@@ -332,9 +334,16 @@ func (c Certificate) SubjectString() string {
 	return subject.String()
 }
 
+// Error reports why the certificate is unusable, and is the guard callers rely
+// on before reading any other accessor: those dereference the parsed
+// certificate, so a value holding neither a certificate nor a parse error has
+// to report one here rather than panic later.
 func (c Certificate) Error() error {
 	if c.err != nil {
 		return fmt.Errorf("ERROR: block at position %d: %v", c.position, c.err)
+	}
+	if c.x509Certificate == nil {
+		return fmt.Errorf("ERROR: block at position %d: %v", c.position, errNoCertificate)
 	}
 	return nil
 }

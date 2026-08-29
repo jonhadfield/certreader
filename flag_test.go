@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -24,6 +25,8 @@ func TestParseFlags(t *testing.T) {
 		assert.False(t, flags.Pem)
 		assert.False(t, flags.PemOnly)
 		assert.False(t, flags.JSON)
+		assert.Empty(t, flags.ExpiringWithin)
+		assert.Zero(t, flags.ExpiringWindow)
 		assert.False(t, flags.Version)
 		assert.Empty(t, flags.Args)
 	})
@@ -133,5 +136,44 @@ func setInput(t *testing.T, args []string, env map[string]string) {
 		for k := range env {
 			os.Unsetenv(k)
 		}
+	})
+}
+
+func TestParseFlagsExpiringWithin(t *testing.T) {
+
+	t.Run("given a valid window then it is parsed", func(t *testing.T) {
+		setInput(t, []string{"flag", "-expiring-within=30d"}, nil)
+
+		flags, err := ParseFlags()
+		require.NoError(t, err)
+
+		assert.Equal(t, "30d", flags.ExpiringWithin)
+		assert.Equal(t, 30*24*time.Hour, flags.ExpiringWindow)
+	})
+
+	t.Run("given the env var then it is parsed", func(t *testing.T) {
+		setInput(t, []string{"flag"}, map[string]string{"CERTREADER_EXPIRING_WITHIN": "2w"})
+
+		flags, err := ParseFlags()
+		require.NoError(t, err)
+
+		assert.Equal(t, 14*24*time.Hour, flags.ExpiringWindow)
+	})
+
+	t.Run("given an invalid window then parsing fails", func(t *testing.T) {
+		setInput(t, []string{"flag", "-expiring-within=soon"}, nil)
+
+		_, err := ParseFlags()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "-expiring-within")
+	})
+
+	t.Run("given no window then the check stays off", func(t *testing.T) {
+		setInput(t, []string{"flag"}, nil)
+
+		flags, err := ParseFlags()
+		require.NoError(t, err)
+
+		assert.Empty(t, flags.ExpiringWithin, "empty is what keeps a zero window meaningful")
 	})
 }

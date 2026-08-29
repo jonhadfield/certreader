@@ -25,6 +25,7 @@ certreader [flags] [<file>|<host:port> ...]
 | -chains       | whether to print verified chains as well                                                          |
 | -clipboard    | read input from clipboard (only if the clipboard is supported)                                    |
 | -expiry       | print expiry of certificates                                                                      |
+| -expiring-within | exit non-zero if any certificate expires within this window, e.g. 30d, 2w, 72h                  |
 | -extensions   | whether to print extensions                                                                       |
 | -insecure     | whether a client verifies the server's certificate chain and host name (only applicable for host) |
 | -issuer-like  | print certificates with subject field containing supplied string                                  |
@@ -47,6 +48,30 @@ certreader [flags] [<file>|<host:port> ...]
 When a PKCS#12/PFX input requires a password and no `--pfx-password` value is supplied, `certreader` prompts on the
 terminal; set the flag or `CERTREADER_PFX_PASSWORD` for non-interactive usage.
 ```
+
+## exit codes
+
+| code | meaning |
+|------|---------|
+| 0 | everything read, and any checks asked for passed |
+| 1 | a location could not be read, so its status is unknown rather than good |
+| 2 | a check failed: a certificate is revoked, or expires within `-expiring-within` |
+
+Checks are opt-in. Without `-revocation` nothing is known about revocation, and without
+`-expiring-within` an expired certificate is reported but not treated as a failure — inspecting an
+expired certificate is a normal thing to want to do.
+
+```shell script
+certreader -revocation -expiring-within 14d example.com:443 || echo "needs attention"
+```
+
+`-expiring-within` accepts go duration syntax plus day and week suffixes: `30d`, `2w`, `72h`, `90m`.
+A window of `0` means "already expired", and an expired certificate falls inside any window.
+
+Where both apply, a failed check (2) outranks a load error (1): a certificate known to be revoked is
+more actionable than one that could not be read, and load failures are reported on stderr anyway.
+Only what survives the filtering flags is checked, so `-no-expired` excludes certificates from the
+checks as well as from the output.
 
 ## json output
 

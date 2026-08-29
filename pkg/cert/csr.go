@@ -116,9 +116,15 @@ func (c CSR) SubjectString() string {
 	return subject.String()
 }
 
+// Error reports why the request is unusable. As with Certificate.Error, callers
+// use this as the guard before reading accessors that dereference the parsed
+// request.
 func (c CSR) Error() error {
 	if c.err != nil {
 		return fmt.Errorf("ERROR: block at position %d: %v", c.position, c.err)
+	}
+	if c.x509CSR == nil {
+		return fmt.Errorf("ERROR: block at position %d: %v", c.position, errNoCertificateReq)
 	}
 	return nil
 }
