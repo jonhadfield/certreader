@@ -11,16 +11,20 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"golang.org/x/term"
 )
 
 var Version = "dev"
 
-// revocationTimeout bounds the whole revocation check, however many locations
-// and sources it has to consult.
-const revocationTimeout = 30 * time.Second
+// A revocation check makes several requests one after another, and a CRL can be
+// large, so a request is given more time than a handshake and the whole check
+// more again. At the default timeout these work out as the ten and thirty
+// seconds that used to be hardcoded.
+const (
+	revocationRequestMultiple = 2
+	revocationBudgetMultiple  = 6
+)
 
 func main() {
 
@@ -53,8 +57,9 @@ func main() {
 		locations = locations.SortByExpiry()
 	}
 	if flags.Revocation && revocationIsRendered(flags) {
-		ctx, cancel := context.WithTimeout(context.Background(), revocationTimeout)
-		locations = locations.CheckRevocation(ctx, nil)
+		ctx, cancel := context.WithTimeout(context.Background(), flags.Timeout*revocationBudgetMultiple)
+		checker := &cert.RevocationChecker{RequestTimeout: flags.Timeout * revocationRequestMultiple}
+		locations = locations.CheckRevocation(ctx, checker)
 		// not deferred, because the process exits below without unwinding
 		cancel()
 	}
@@ -154,11 +159,17 @@ func loadFromArgs(args []string, flags Flags) cert.Locations {
 }
 
 func loadFromArg(arg string, flags Flags) cert.Location {
+	options := cert.NetworkOptions{
+		ServerName:         flags.ServerName,
+		InsecureSkipVerify: flags.Insecure,
+		StartTLS:           flags.StartTLS,
+		Timeout:            flags.Timeout,
+	}
 	if isTCPNetworkAddress(arg) {
-		return cert.LoadFromNetwork(arg, flags.ServerName, flags.Insecure, flags.StartTLS)
+		return cert.LoadFromNetwork(arg, options)
 	}
 	if _, err := os.Stat(arg); err != nil && os.IsNotExist(err) && looksLikeFQDN(arg) {
-		location := cert.LoadFromNetwork(arg+":"+defaultPort(flags.StartTLS), flags.ServerName, flags.Insecure, flags.StartTLS)
+		location := cert.LoadFromNetwork(arg+":"+defaultPort(flags.StartTLS), options)
 		location.Path = arg
 		return location
 	}

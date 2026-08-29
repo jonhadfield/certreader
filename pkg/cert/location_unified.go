@@ -238,22 +238,45 @@ func (l Location) leafAndIssuer() (leaf, issuer *x509.Certificate) {
 	return leaf, nil
 }
 
-// LoadFromNetwork loads certificates from a network address. When startTLS
-// names a protocol the connection begins in plaintext and is upgraded, rather
-// than handshaking immediately.
-func LoadFromNetwork(addr string, serverName string, tlsSkipVerify bool, startTLS StartTLSProtocol) Location {
+// NetworkOptions configures how a network location is read. The zero value is
+// usable and applies the defaults.
+type NetworkOptions struct {
+	// ServerName overrides the name verified against the certificate, and sent
+	// as SNI, which is otherwise taken from the address.
+	ServerName string
+	// InsecureSkipVerify accepts a certificate that does not verify.
+	InsecureSkipVerify bool
+	// StartTLS upgrades a plaintext connection rather than handshaking
+	// immediately.
+	StartTLS StartTLSProtocol
+	// Timeout bounds the connection, and for a starttls protocol the
+	// negotiation and handshake together. Zero selects the default.
+	Timeout time.Duration
+}
+
+func (o NetworkOptions) timeout() time.Duration {
+	if o.Timeout > 0 {
+		return o.Timeout
+	}
+	return tlsDialTimeout
+}
+
+// LoadFromNetwork loads certificates from a network address. When the options
+// name a starttls protocol the connection begins in plaintext and is upgraded,
+// rather than handshaking immediately.
+func LoadFromNetwork(addr string, opts NetworkOptions) Location {
 
 	config := &tls.Config{
-		InsecureSkipVerify: tlsSkipVerify,
-		ServerName:         serverName,
+		InsecureSkipVerify: opts.InsecureSkipVerify,
+		ServerName:         opts.ServerName,
 	}
 
 	var conn *tls.Conn
 	var err error
-	if startTLS == StartTLSNone {
-		conn, err = tls.DialWithDialer(&net.Dialer{Timeout: tlsDialTimeout}, "tcp", addr, config)
+	if opts.StartTLS == StartTLSNone {
+		conn, err = tls.DialWithDialer(&net.Dialer{Timeout: opts.timeout()}, "tcp", addr, config)
 	} else {
-		conn, err = dialStartTLS(addr, config, startTLS)
+		conn, err = dialStartTLS(addr, config, opts.StartTLS, opts.timeout())
 	}
 	if err != nil {
 		slog.Error(fmt.Sprintf("load certificate from network %s: %v", addr, err.Error()))
@@ -274,16 +297,16 @@ func LoadFromNetwork(addr string, serverName string, tlsSkipVerify bool, startTL
 
 // dialStartTLS connects in plaintext, asks the server to begin TLS, and then
 // completes the handshake over the same connection.
-func dialStartTLS(addr string, config *tls.Config, protocol StartTLSProtocol) (*tls.Conn, error) {
+func dialStartTLS(addr string, config *tls.Config, protocol StartTLSProtocol, timeout time.Duration) (*tls.Conn, error) {
 
-	raw, err := net.DialTimeout("tcp", addr, tlsDialTimeout)
+	raw, err := net.DialTimeout("tcp", addr, timeout)
 	if err != nil {
 		return nil, err
 	}
 
 	// one budget for the negotiation and the handshake, so a server that
 	// answers slowly cannot hang the whole run
-	if err := raw.SetDeadline(time.Now().Add(tlsDialTimeout)); err != nil {
+	if err := raw.SetDeadline(time.Now().Add(timeout)); err != nil {
 		raw.Close()
 		return nil, err
 	}

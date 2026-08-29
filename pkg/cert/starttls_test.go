@@ -162,7 +162,7 @@ func TestLoadFromNetworkStartTLS(t *testing.T) {
 			addr := startPlaintextServer(t, test.exchange)
 
 			// self signed, so verification is skipped; the point is the upgrade
-			location := LoadFromNetwork(addr, "", true, test.protocol)
+			location := LoadFromNetwork(addr, NetworkOptions{InsecureSkipVerify: true, StartTLS: test.protocol})
 
 			require.NoError(t, location.Error)
 			require.Len(t, location.Certificates, 1)
@@ -182,7 +182,7 @@ func TestLoadFromNetworkStartTLSFailures(t *testing.T) {
 			return false
 		})
 
-		location := LoadFromNetwork(addr, "", true, StartTLSPostgres)
+		location := LoadFromNetwork(addr, NetworkOptions{InsecureSkipVerify: true, StartTLS: StartTLSPostgres})
 
 		require.Error(t, location.Error)
 		assert.Contains(t, location.Error.Error(), "refused tls")
@@ -194,7 +194,7 @@ func TestLoadFromNetworkStartTLSFailures(t *testing.T) {
 			return false
 		})
 
-		location := LoadFromNetwork(addr, "", true, StartTLSSMTP)
+		location := LoadFromNetwork(addr, NetworkOptions{InsecureSkipVerify: true, StartTLS: StartTLSSMTP})
 
 		require.Error(t, location.Error)
 		assert.Contains(t, location.Error.Error(), "smtp greeting")
@@ -211,7 +211,7 @@ func TestLoadFromNetworkStartTLSFailures(t *testing.T) {
 			return false
 		})
 
-		location := LoadFromNetwork(addr, "", true, StartTLSSMTP)
+		location := LoadFromNetwork(addr, NetworkOptions{InsecureSkipVerify: true, StartTLS: StartTLSSMTP})
 
 		require.Error(t, location.Error)
 		assert.Contains(t, location.Error.Error(), "smtp starttls")
@@ -230,14 +230,14 @@ func TestLoadFromNetworkStartTLSFailures(t *testing.T) {
 			return false
 		})
 
-		location := LoadFromNetwork(addr, "", true, StartTLSLDAP)
+		location := LoadFromNetwork(addr, NetworkOptions{InsecureSkipVerify: true, StartTLS: StartTLSLDAP})
 
 		require.Error(t, location.Error)
 		assert.Contains(t, location.Error.Error(), "result code 53")
 	})
 
 	t.Run("given nothing listening then the dial error is returned", func(t *testing.T) {
-		location := LoadFromNetwork("127.0.0.1:1", "", true, StartTLSSMTP)
+		location := LoadFromNetwork("127.0.0.1:1", NetworkOptions{InsecureSkipVerify: true, StartTLS: StartTLSSMTP})
 		require.Error(t, location.Error)
 	})
 }
@@ -328,5 +328,46 @@ func Test_ldapResultCode(t *testing.T) {
 		body := []byte{0x02, 0x01, 0x01, 0x65, 0x02, 0x0a, 0x00}
 		_, err := ldapResultCode(body)
 		require.Error(t, err)
+	})
+}
+
+func TestNetworkOptionsTimeout(t *testing.T) {
+
+	t.Run("given no timeout then the default applies", func(t *testing.T) {
+		assert.Equal(t, tlsDialTimeout, NetworkOptions{}.timeout())
+	})
+
+	t.Run("given a timeout then it is used", func(t *testing.T) {
+		assert.Equal(t, 90*time.Second, NetworkOptions{Timeout: 90 * time.Second}.timeout())
+	})
+
+	t.Run("given a nonsensical timeout then the default applies", func(t *testing.T) {
+		assert.Equal(t, tlsDialTimeout, NetworkOptions{Timeout: -time.Second}.timeout())
+	})
+
+	t.Run("given a short timeout then a silent server is given up on", func(t *testing.T) {
+		// a listener that accepts and then says nothing, which is what a
+		// hanging server looks like
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		require.NoError(t, err)
+		defer listener.Close()
+		go func() {
+			conn, acceptErr := listener.Accept()
+			if acceptErr == nil {
+				time.Sleep(5 * time.Second)
+				conn.Close()
+			}
+		}()
+
+		started := time.Now()
+		location := LoadFromNetwork(listener.Addr().String(), NetworkOptions{
+			InsecureSkipVerify: true,
+			StartTLS:           StartTLSSMTP,
+			Timeout:            300 * time.Millisecond,
+		})
+		elapsed := time.Since(started)
+
+		require.Error(t, location.Error)
+		assert.Less(t, elapsed, 3*time.Second, "the configured timeout must bound the wait")
 	})
 }

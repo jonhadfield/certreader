@@ -28,7 +28,10 @@ type Flags struct {
 	ExpiringWindow time.Duration
 	ServerName     string
 	// StartTLS names a protocol to upgrade from plaintext, empty for direct TLS.
-	StartTLS    cert.StartTLSProtocol
+	StartTLS cert.StartTLSProtocol
+	// TimeoutRaw is the raw flag value, Timeout its parsed form.
+	TimeoutRaw  string
+	Timeout     time.Duration
 	Insecure    bool
 	Revocation  bool
 	Chains      bool
@@ -70,6 +73,8 @@ func ParseFlags() (Flags, error) {
 		"verify the hostname on the returned certificates, useful for testing SNI")
 	flagSet.StringVar(&startTLS, "starttls", getStringEnv("CERTREADER_STARTTLS", ""),
 		fmt.Sprintf("upgrade a plaintext connection to tls, one of: %s", strings.Join(cert.StartTLSProtocols(), ", ")))
+	flagSet.StringVar(&flags.TimeoutRaw, "timeout", getStringEnv("CERTREADER_TIMEOUT", defaultTimeout.String()),
+		"how long to wait for a connection, and proportionally longer for revocation requests")
 	flagSet.BoolVar(&flags.Insecure, "insecure", getBoolEnv("CERTREADER_INSECURE", false),
 		"whether a client verifies the server's certificate chain and host name (only applicable for host)")
 	flagSet.BoolVar(&flags.Revocation, "revocation", getBoolEnv("CERTREADER_REVOCATION", false),
@@ -108,6 +113,12 @@ func ParseFlags() (Flags, error) {
 		return Flags{}, err
 	}
 	flags.Args = flagSet.Args()
+
+	timeout, err := parseTimeout(flags.TimeoutRaw)
+	if err != nil {
+		return Flags{}, fmt.Errorf("-timeout: %w", err)
+	}
+	flags.Timeout = timeout
 
 	protocol, err := cert.ParseStartTLSProtocol(startTLS)
 	if err != nil {
@@ -200,4 +211,26 @@ func parseExpiryWindow(in string) (time.Duration, error) {
 		return 0, fmt.Errorf("%q is negative", in)
 	}
 	return window, nil
+}
+
+// defaultTimeout is how long a connection is given, and the base the revocation
+// timeouts are derived from.
+const defaultTimeout = 5 * time.Second
+
+// parseTimeout accepts go duration syntax. Unlike an expiry window this is not
+// a span of days, so the day and week suffixes would only invite mistakes.
+func parseTimeout(in string) (time.Duration, error) {
+
+	in = strings.TrimSpace(in)
+	if in == "" {
+		return 0, errors.New("no duration given")
+	}
+	timeout, err := time.ParseDuration(in)
+	if err != nil {
+		return 0, fmt.Errorf("%q is not a duration, expected something like 5s or 500ms", in)
+	}
+	if timeout <= 0 {
+		return 0, fmt.Errorf("%q is not positive", in)
+	}
+	return timeout, nil
 }
