@@ -28,6 +28,7 @@ certreader [flags] [<file>|<host:port> ...]
 | -extensions   | whether to print extensions                                                                       |
 | -insecure     | whether a client verifies the server's certificate chain and host name (only applicable for host) |
 | -issuer-like  | print certificates with subject field containing supplied string                                  |
+| -json         | output as json (takes precedence over -expiry and -pem-only)                                      |
 | -no-duplicate | do not print duplicate certificates                                                               |
 | -no-expired   | do not print expired certificates                                                                 |
 | -pem          | whether to print pem as well                                                                      |
@@ -46,6 +47,29 @@ certreader [flags] [<file>|<host:port> ...]
 When a PKCS#12/PFX input requires a password and no `--pfx-password` value is supplied, `certreader` prompts on the
 terminal; set the flag or `CERTREADER_PFX_PASSWORD` for non-interactive usage.
 ```
+
+## json output
+
+`-json` emits a single JSON document on stdout instead of the formatted text, for piping into `jq` or
+a monitoring check. Logging goes to stderr, so the document stays clean even with `-verbose`.
+
+```shell script
+certreader -json www.digicert.com | jq -r '.locations[].certificates[0] | "\(.subject) expires \(.not_after)"'
+```
+
+```shell script
+certreader -json -revocation www.digicert.com | jq -r '.locations[].revocation.status'
+```
+
+Every location becomes an entry under `locations`, carrying `certificates` or `csrs`, and the
+revocation result when one was requested. A location that failed to load reports an `error` instead,
+and a certificate that failed to parse carries only its `position` and `error`, since nothing else
+could be read from it. Timestamps are RFC 3339.
+
+The `extensions`, `signature` and `pem` fields are included only when the corresponding flags are
+set, matching what the text output would show, so `-json -more -extensions` gives everything.
+
+Field names are part of the interface and will be added to rather than renamed.
 
 ## revocation
 

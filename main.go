@@ -52,6 +52,19 @@ func main() {
 	if flags.SortExpiry {
 		locations = locations.SortByExpiry()
 	}
+	if flags.Revocation && revocationIsRendered(flags) {
+		ctx, cancel := context.WithTimeout(context.Background(), revocationTimeout)
+		defer cancel()
+		locations = locations.CheckRevocation(ctx, nil)
+	}
+
+	if flags.JSON {
+		if err := print.JSON(locations, flags.Chains, flags.Pem, flags.Extensions, flags.Signature); err != nil {
+			slog.Error(fmt.Sprintf("writing json: %v", err))
+			os.Exit(1)
+		}
+		return
+	}
 	if flags.Expiry {
 		print.ExpiryUnified(locations)
 		return
@@ -60,12 +73,17 @@ func main() {
 		print.PemUnified(locations, flags.Chains)
 		return
 	}
-	if flags.Revocation {
-		ctx, cancel := context.WithTimeout(context.Background(), revocationTimeout)
-		defer cancel()
-		locations = locations.CheckRevocation(ctx, nil)
-	}
 	print.LocationsUnified(locations, flags.Chains, flags.Pem, flags.Extensions, flags.Signature)
+}
+
+// revocationIsRendered reports whether the selected output would show a
+// revocation result. The narrower text modes do not, so the network work is
+// skipped rather than performed and discarded.
+func revocationIsRendered(flags Flags) bool {
+	if flags.JSON {
+		return true
+	}
+	return !flags.Expiry && !flags.PemOnly
 }
 
 func setLogger(verbose bool) {

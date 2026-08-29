@@ -356,6 +356,12 @@ func (c Certificate) IPAddresses() []string {
 	return ips
 }
 
+// Position is where the certificate appeared in its source, starting at 1. For
+// a network location that is chain order, the end-entity certificate first.
+func (c Certificate) Position() int {
+	return c.position
+}
+
 func (c Certificate) Version() int {
 	return c.x509Certificate.Version
 }
