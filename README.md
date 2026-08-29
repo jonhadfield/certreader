@@ -2,7 +2,8 @@
 
 ### This is a fork of the excellent [certinfo](https://github.com/pete911/certinfo) tool with some additional features including pkcs12 support, clipboard reading, and colourised output.
 
-[![pipeline](https://github.com/jonhadfield/certreader/actions/workflows/pipeline.yml/badge.svg)](https://github.com/jonhadfield/certreader/actions/workflows/pipeline.yml)
+[![go](https://github.com/jonhadfield/certreader/actions/workflows/go.yml/badge.svg)](https://github.com/jonhadfield/certreader/actions/workflows/go.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/jonhadfield/certreader)](https://goreportcard.com/report/github.com/jonhadfield/certreader)
 
 Output detailed information about TLS certificates from local files, network hosts or clipboard.
 
