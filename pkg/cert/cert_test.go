@@ -1,6 +1,9 @@
 package cert
 
 import (
+	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -148,4 +151,65 @@ func newPKCS12Bundle(t *testing.T, password string) []byte {
 	pfx, err := enc.Encode(privKey, cert, nil, password)
 	require.NoError(t, err)
 	return pfx
+}
+
+// newPKCS12EndingInWhitespace generates bundles until it produces one whose
+// final byte is one that bytes.TrimSpace would strip. Roughly one in forty
+// qualifies, so the bound is generous. An ECDSA key keeps generation cheap.
+func newPKCS12EndingInWhitespace(t *testing.T) []byte {
+	t.Helper()
+
+	for attempt := 0; attempt < 2000; attempt++ {
+		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+
+		template := &x509.Certificate{
+			SerialNumber:          big.NewInt(int64(attempt + 1)),
+			Subject:               pkix.Name{CommonName: "certreader pkcs12 test"},
+			NotBefore:             time.Now().Add(-time.Hour),
+			NotAfter:              time.Now().Add(24 * time.Hour),
+			KeyUsage:              x509.KeyUsageDigitalSignature,
+			BasicConstraintsValid: true,
+		}
+		der, err := x509.CreateCertificate(rand.Reader, template, template, key.Public(), key)
+		require.NoError(t, err)
+		certificate, err := x509.ParseCertificate(der)
+		require.NoError(t, err)
+
+		pfx, err := pkcs12.Passwordless.Encode(key, certificate, nil, "")
+		require.NoError(t, err)
+
+		if len(bytes.TrimSpace(pfx)) != len(pfx) {
+			return pfx
+		}
+	}
+
+	t.Fatal("could not generate a pkcs12 bundle ending in a whitespace byte")
+	return nil
+}
+
+// A PKCS12 or DER file is binary, so its last byte is as likely as any other to
+// be one that bytes.TrimSpace strips. Trimming it truncated the file and the
+// parse failed, which showed up as an intermittently red build.
+func TestFromBytesDoesNotTrimBinary(t *testing.T) {
+
+	t.Run("given a pkcs12 bundle ending in a whitespace byte then it still parses", func(t *testing.T) {
+		pfx := newPKCS12EndingInWhitespace(t)
+		require.NotEqual(t, len(pfx), len(bytes.TrimSpace(pfx)), "fixture must actually end in such a byte")
+
+		certificates, err := FromBytes(pfx, "")
+		require.NoError(t, err)
+		require.Len(t, certificates, 1)
+		assert.Equal(t, "CN=certreader pkcs12 test", certificates[0].SubjectString())
+	})
+
+	t.Run("given pem with surrounding whitespace then it still parses", func(t *testing.T) {
+		// the trimming exists for this case, so it has to keep working
+		padded := append([]byte("\n\n  "), loadTestFile(t, "cert.pem")...)
+		padded = append(padded, []byte("  \n\n")...)
+
+		certificates, err := FromBytes(padded, "")
+		require.NoError(t, err)
+		require.NotEmpty(t, certificates)
+	})
 }
