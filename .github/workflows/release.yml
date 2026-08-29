@@ -62,11 +62,16 @@ jobs:
           case "$tag" in
             *-*) prerelease=true ;;
           esac
-          # the annotation is the release body. gh refuses --notes-from-tag
-          # alongside --repo, and reading it here says plainly where it comes from
-          notes="$(git tag -l --format='%(contents)' "$tag")"
-          if [ -z "$notes" ]; then
-            notes="$tag"
+          # the annotation is the release body. It is read from the api rather
+          # than the checkout, which does not fetch the annotated tag object, so
+          # git would fall through to the commit message instead
+          notes="$tag"
+          ref="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag")"
+          if [ "$(echo "$ref" | jq -r '.object.type')" = "tag" ]; then
+            annotation="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$(echo "$ref" | jq -r '.object.sha')" --jq '.message')"
+            if [ -n "$annotation" ]; then
+              notes="$annotation"
+            fi
           fi
           # the rest api rather than gh release create, which uses graphql and
           # so fails against a spent graphql budget while rest is still fine
