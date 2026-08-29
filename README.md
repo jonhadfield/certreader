@@ -132,28 +132,36 @@ overridden with a flag.
 ## release
 
 Releases are built and published with [GoReleaser](https://goreleaser.com) from a tagged commit.
-There is no release workflow in CI, so pushing a tag does not publish anything on its own — the
-`release` make target does the work, and needs Docker and a clean working tree.
-
-Tag the commit and push the tag:
+Pushing the tag is all that is needed — the `release` workflow builds every platform and uploads the
+artifacts to a single GitHub release, then updates the homebrew cask.
 
 ```shell script
 git tag -a -m "add super cool feature" v1.0.0
 git push --follow-tags
 ```
 
-Then build and upload the artifacts:
+### required secret
+
+The workflow needs a `RELEASE_TOKEN` repository secret: a personal access token with `repo` scope on
+both `jonhadfield/certreader` and `jonhadfield/homebrew-certreader`. The token built into Actions
+cannot write to another repository, and the darwin build pushes the cask update to the tap. Without
+the secret the workflow stops at its preflight job and publishes nothing.
+
+Run the workflow manually from the Actions tab to check the secret and the GoReleaser configs
+without cutting a tag; a manual run stops after preflight.
+
+### releasing by hand
+
+The same builds can be run locally, which is useful when debugging a release failure:
 
 ```shell script
 GITHUB_TOKEN=$(gh auth token) make release
 ```
 
-`GITHUB_TOKEN` needs `repo` scope. It publishes the GitHub release and pushes the updated cask to
-`jonhadfield/homebrew-certreader`, so the token has to be able to write to both repositories.
-
-The target builds darwin on the host and linux/windows inside `goreleaser-cross` containers, running
-`goreleaser` once per platform against the same release, using the configs in `.goreleaser/`.
-Individual platforms can be built on their own, e.g. `make release-mac` or `make release-linux-arm64`.
+This needs Docker, a local `goreleaser`, and a clean working tree. Individual platforms can be built
+on their own, e.g. `make release-mac` or `make release-linux-arm64`. Both routes use the same make
+targets and the configs in `.goreleaser/`, building darwin on the host and linux/windows inside
+`goreleaser-cross` containers.
 
 ## examples
 

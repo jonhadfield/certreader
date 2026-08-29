@@ -1,0 +1,93 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  # lets preflight be run on demand to validate setup without cutting a tag
+  workflow_dispatch:
+
+# the repository default is read, and creating a release needs write
+permissions:
+  contents: write
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      -
+        name: check release token is configured
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          if [ -z "$RELEASE_TOKEN" ]; then
+            echo "::error::RELEASE_TOKEN secret is not set. Releases need a personal access token with repo scope on both jonhadfield/certreader and jonhadfield/homebrew-certreader, because the darwin build pushes the cask update to the tap and the built-in GITHUB_TOKEN cannot write to another repository."
+            exit 1
+          fi
+          echo "RELEASE_TOKEN is configured"
+      -
+        name: install goreleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          install-only: true
+      -
+        name: validate goreleaser configs
+        run: |
+          for config in .goreleaser/.goreleaser.*.yml; do
+            echo "checking $config"
+            goreleaser check --config "$config"
+          done
+
+  release:
+    needs: preflight
+    # only publish for a tag; a manual run stops after preflight
+    if: startsWith(github.ref, 'refs/tags/v')
+    strategy:
+      # each target runs goreleaser against the same release, so they must not
+      # race each other to create it
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        include:
+          - target: release-linux-amd64
+            os: ubuntu-latest
+          - target: release-windows-amd64
+            os: ubuntu-latest
+          - target: release-linux-arm64
+            os: ubuntu-24.04-arm
+          - target: release-windows-arm64
+            os: ubuntu-24.04-arm
+          - target: release-mac
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      -
+        name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      -
+        name: setup go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      -
+        # the linux and windows targets run goreleaser inside goreleaser-cross,
+        # only the darwin target needs it on the runner itself
+        name: install goreleaser
+        if: matrix.target == 'release-mac'
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          install-only: true
+      -
+        name: ${{ matrix.target }}
+        run: make ${{ matrix.target }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
