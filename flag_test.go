@@ -221,3 +221,66 @@ func Test_defaultPort(t *testing.T) {
 	assert.Equal(t, "587", defaultPort(cert.StartTLSSMTP))
 	assert.Equal(t, "389", defaultPort(cert.StartTLSLDAP))
 }
+
+func Test_parseTimeout(t *testing.T) {
+
+	valid := map[string]time.Duration{
+		"5s":     5 * time.Second,
+		"500ms":  500 * time.Millisecond,
+		"2m":     2 * time.Minute,
+		"1m30s":  90 * time.Second,
+		" 10s  ": 10 * time.Second,
+	}
+	for in, expected := range valid {
+		out, err := parseTimeout(in)
+		require.NoError(t, err, in)
+		assert.Equal(t, expected, out, in)
+	}
+
+	// a timeout is not a span of days, so those suffixes would only invite mistakes
+	for _, in := range []string{"", "  ", "0", "-5s", "abc", "30d", "5"} {
+		_, err := parseTimeout(in)
+		assert.Error(t, err, "%q should be rejected", in)
+	}
+}
+
+func TestParseFlagsTimeout(t *testing.T) {
+
+	t.Run("given no flag then the default applies", func(t *testing.T) {
+		setInput(t, []string{"flag"}, nil)
+
+		flags, err := ParseFlags()
+		require.NoError(t, err)
+		assert.Equal(t, defaultTimeout, flags.Timeout)
+	})
+
+	t.Run("given a flag then it is parsed", func(t *testing.T) {
+		setInput(t, []string{"flag", "-timeout=20s"}, nil)
+
+		flags, err := ParseFlags()
+		require.NoError(t, err)
+		assert.Equal(t, 20*time.Second, flags.Timeout)
+	})
+
+	t.Run("given the env var then it is parsed", func(t *testing.T) {
+		setInput(t, []string{"flag"}, map[string]string{"CERTREADER_TIMEOUT": "1m"})
+
+		flags, err := ParseFlags()
+		require.NoError(t, err)
+		assert.Equal(t, time.Minute, flags.Timeout)
+	})
+
+	t.Run("given an invalid value then parsing fails", func(t *testing.T) {
+		setInput(t, []string{"flag", "-timeout=soon"}, nil)
+
+		_, err := ParseFlags()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "-timeout")
+	})
+
+	t.Run("given the default then the derived revocation timeouts match the old hardcoded ones", func(t *testing.T) {
+		// the defaults must not shift just because they became configurable
+		assert.Equal(t, 10*time.Second, defaultTimeout*revocationRequestMultiple)
+		assert.Equal(t, 30*time.Second, defaultTimeout*revocationBudgetMultiple)
+	})
+}

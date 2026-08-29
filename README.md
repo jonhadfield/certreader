@@ -51,6 +51,7 @@ certreader [flags] [<file>|<host:port> ...]
 | -starttls     | upgrade a plaintext connection to tls: smtp, imap, pop3, ftp, nntp, ldap, postgres                |
 | -sort-expiry  | sort certificates by expiration date                                                              |
 | -subject-like | print certificates with issuer field containing supplied string                                   |
+| -timeout      | how long to wait for a connection, and proportionally longer for revocation requests (default 5s)  |
 | -more         | use a combination of the '-pem -signature -chains' flags                                          |
 | -version      | certreader version                                                                                  |
 | -help         | help                                                                                              |
@@ -207,6 +208,20 @@ otherwise at the time it was checked".
 Requests honour `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`. Each request is bounded by a 10 second timeout, the whole
 check by 30 seconds, and response bodies by 32MB. Revocation is checked only for the default output, not for `-expiry`
 or `-pem-only`.
+
+## timeouts
+
+`-timeout` (default `5s`) bounds a connection, and for `-starttls` the negotiation and handshake
+together. It takes go duration syntax, such as `10s`, `500ms` or `1m30s`.
+
+A revocation check makes several requests one after another and a CRL can be large, so those are
+given proportionally longer: each request twice the timeout, and the whole check six times it. At the
+default that comes to 10 seconds a request and 30 seconds overall, which is what these were before
+they became configurable.
+
+```shell script
+certreader -timeout 30s -revocation slow.example.com:443
+```
 
 If you need to run against multiple hosts, it is faster to execute command with multiple arguments e.g.
 `certreader -insecure -expiry google.com:443 amazon.com:443 ...` rather than executing command multiple times. Args are

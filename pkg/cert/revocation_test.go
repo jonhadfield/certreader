@@ -502,3 +502,38 @@ func TestRevocationAttemptString(t *testing.T) {
 type assertError struct{}
 
 func (assertError) Error() string { return "boom" }
+
+func TestRevocationCheckerRequestTimeout(t *testing.T) {
+
+	t.Run("given no request timeout then the default applies", func(t *testing.T) {
+		checker := NewRevocationChecker()
+		assert.Equal(t, defaultRevocationRequestTimeout, checker.client().Timeout)
+	})
+
+	t.Run("given a request timeout then it is used", func(t *testing.T) {
+		checker := &RevocationChecker{RequestTimeout: 45 * time.Second}
+		assert.Equal(t, 45*time.Second, checker.client().Timeout)
+	})
+
+	t.Run("given a supplied client then its own timeout is left alone", func(t *testing.T) {
+		own := &http.Client{Timeout: time.Minute}
+		checker := &RevocationChecker{HTTPClient: own, RequestTimeout: time.Second}
+		assert.Equal(t, time.Minute, checker.client().Timeout)
+	})
+
+	t.Run("given a short timeout then a silent responder is given up on", func(t *testing.T) {
+		responder := newStubServer(t)
+		chain := newOCSPTestChain(t, withOCSPServer(responder.URL))
+		responder.serve(func(w http.ResponseWriter, _ *http.Request) {
+			time.Sleep(5 * time.Second)
+		})
+
+		checker := &RevocationChecker{RequestTimeout: 300 * time.Millisecond}
+		started := time.Now()
+		status := checker.Check(context.Background(), chain.leaf, chain.issuer, nil)
+		elapsed := time.Since(started)
+
+		assert.True(t, status.IsUnknown())
+		assert.Less(t, elapsed, 3*time.Second, "the configured timeout must bound the wait")
+	})
+}

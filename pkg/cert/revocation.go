@@ -125,6 +125,9 @@ type RevocationChecker struct {
 	MaxResponseSize int64
 	// SkipStaple forces a live query even when a stapled response is available.
 	SkipStaple bool
+	// RequestTimeout bounds a single OCSP, CRL or issuer request. Zero selects
+	// the default.
+	RequestTimeout time.Duration
 	// SkipIssuerFetch stops a missing issuer being downloaded from the
 	// certificate's authority information access extension.
 	SkipIssuerFetch bool
@@ -149,8 +152,12 @@ func (c *RevocationChecker) client() *http.Client {
 		return c.HTTPClient
 	}
 	c.defaultClientOnce.Do(func() {
+		timeout := c.RequestTimeout
+		if timeout <= 0 {
+			timeout = defaultRevocationRequestTimeout
+		}
 		c.defaultClient = &http.Client{
-			Timeout: defaultRevocationRequestTimeout,
+			Timeout: timeout,
 			Transport: &http.Transport{
 				Proxy: http.ProxyFromEnvironment,
 			},
