@@ -88,6 +88,9 @@ type RevocationStatus struct {
 	// SignatureVerified reports whether the response or list was verified
 	// against the issuing CA. When false the verdict is unauthenticated.
 	SignatureVerified bool
+	// IssuerFetchedFrom is the url a missing issuer was downloaded from, empty
+	// when the issuer was presented alongside the certificate.
+	IssuerFetchedFrom string
 	// Attempts records sources that were consulted without producing a verdict.
 	Attempts []RevocationAttempt
 }
@@ -122,6 +125,12 @@ type RevocationChecker struct {
 	MaxResponseSize int64
 	// SkipStaple forces a live query even when a stapled response is available.
 	SkipStaple bool
+	// SkipIssuerFetch stops a missing issuer being downloaded from the
+	// certificate's authority information access extension.
+	SkipIssuerFetch bool
+
+	issuerCacheMu sync.Mutex
+	issuerCache   map[string]*x509.Certificate
 
 	defaultClientOnce sync.Once
 	defaultClient     *http.Client
@@ -176,6 +185,20 @@ func (c *RevocationChecker) Check(ctx context.Context, leaf, issuer *x509.Certif
 	}
 	status.SerialNumber = formatHexArray(leaf.SerialNumber.Bytes())
 
+	// without an issuer nothing can be authenticated and OCSP cannot even be
+	// asked, so it is worth a request to go and get one
+	if issuer == nil {
+		fetched, from, err := c.fetchIssuer(ctx, leaf)
+		if err != nil {
+			status.Attempts = append(status.Attempts, RevocationAttempt{
+				Source: RevocationSourceIssuer, Err: err,
+			})
+		} else {
+			issuer = fetched
+			status.IssuerFetchedFrom = from
+		}
+	}
+
 	if out, ok := c.checkStaple(leaf, issuer, staple, status); ok {
 		return out
 	}
@@ -210,7 +233,7 @@ func (c *RevocationChecker) checkStaple(leaf, issuer *x509.Certificate, staple [
 	}
 
 	out := revocationFromOCSP(parsed, RevocationSourceStaple, "")
-	out.Attempts = status.Attempts
+	carryOver(out, status)
 	return out, true
 }
 
@@ -240,7 +263,7 @@ func (c *RevocationChecker) checkOCSP(ctx context.Context, leaf, issuer *x509.Ce
 			})
 			continue
 		}
-		out.Attempts = status.Attempts
+		carryOver(out, status)
 		return out, true
 	}
 	return nil, false
@@ -265,7 +288,7 @@ func (c *RevocationChecker) checkCRL(ctx context.Context, leaf, issuer *x509.Cer
 			})
 			continue
 		}
-		out.Attempts = status.Attempts
+		carryOver(out, status)
 		return out, true
 	}
 	return nil, false
@@ -379,6 +402,13 @@ func (c *RevocationChecker) do(request *http.Request) ([]byte, error) {
 		return nil, errors.New("empty response")
 	}
 	return raw, nil
+}
+
+// carryOver moves the context gathered before a source answered onto the
+// verdict it produced, which is otherwise built fresh and would lose it.
+func carryOver(out, status *RevocationStatus) {
+	out.Attempts = status.Attempts
+	out.IssuerFetchedFrom = status.IssuerFetchedFrom
 }
 
 // revocationFromOCSP converts a parsed OCSP response into a verdict.

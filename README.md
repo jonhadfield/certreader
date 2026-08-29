@@ -185,9 +185,18 @@ Revocation
 producing one. The CRL fallback matters in practice: several CAs, Let's Encrypt and Google among them, no longer publish
 OCSP responder URLs at all.
 
-Responses and lists are verified against the issuing CA. When the issuer is not available the OCSP step is skipped, as
-no request can be built without it, and any CRL verdict is reported as `not verified`. A verdict past its `Next Update`
-is marked `[stale]`.
+Responses and lists are verified against the issuing CA. When the issuer was not presented alongside the certificate —
+reading a single leaf from a file, say — it is downloaded from the certificate's authority information access
+extension, and the output says where from:
+
+```
+    Signature: verified against issuer
+    Issuer: fetched from http://cacerts.digicert.com/DigiCertEVRSACAG2.crt
+```
+
+A downloaded certificate is only used once it has been shown to have signed the one being checked, since the fetch is
+plain http. If no issuer can be obtained, OCSP is skipped, as no request can be built without one, and any CRL verdict
+is reported as `not verified`. A verdict past its `Next Update` is marked `[stale]`.
 
 ### interpreting the result
 

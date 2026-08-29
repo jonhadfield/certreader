@@ -161,6 +161,9 @@ func printRevocation(location cert.Location) {
 	if status.Source != "" {
 		fmt.Printf("    %s: %s\n", SubAttributeName("Signature"), signatureStatus(status.SignatureVerified))
 	}
+	if status.IssuerFetchedFrom != "" {
+		fmt.Printf("    %s: %s\n", SubAttributeName("Issuer"), "fetched from "+status.IssuerFetchedFrom)
+	}
 	if len(status.Attempts) > 0 {
 		fmt.Printf("    %s\n", SubAttributeName("Not Answered"))
 		for _, attempt := range status.Attempts {
