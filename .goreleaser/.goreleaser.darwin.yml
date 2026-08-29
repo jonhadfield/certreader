@@ -47,6 +47,8 @@ homebrew_casks:
     homepage: https://github.com/jonhadfield/certreader
     description: Output detailed information about TLS certificates...
     commit_msg_template: "Brew cask update for {{ .ProjectName }} {{ .Tag }}"
+    # a prerelease must not become what brew installs
+    skip_upload: "auto"
     directory: Casks
     repository:
       owner: jonhadfield

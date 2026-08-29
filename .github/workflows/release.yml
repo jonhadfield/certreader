@@ -43,15 +43,48 @@ jobs:
             echo "checking $config"
             goreleaser check --config "$config"
           done
+      -
+        # created once here so the platform jobs can upload in parallel. Left to
+        # themselves they would each find no release and race to create it.
+        name: create the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" >/dev/null 2>&1; then
+            echo "release $tag already exists, leaving it alone"
+            exit 0
+          fi
+          # a tag carrying a hyphen is a prerelease, matching what goreleaser
+          # would have decided for itself
+          prerelease=false
+          case "$tag" in
+            *-*) prerelease=true ;;
+          esac
+          # the annotation is the release body. It is read from the api rather
+          # than the checkout, which does not fetch the annotated tag object, so
+          # git would fall through to the commit message instead
+          notes="$tag"
+          ref="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag")"
+          if [ "$(echo "$ref" | jq -r '.object.type')" = "tag" ]; then
+            annotation="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$(echo "$ref" | jq -r '.object.sha')" --jq '.message')"
+            if [ -n "$annotation" ]; then
+              notes="$annotation"
+            fi
+          fi
+          # the rest api rather than gh release create, which uses graphql and
+          # so fails against a spent graphql budget while rest is still fine
+          gh api "repos/$GITHUB_REPOSITORY/releases" --method POST -f tag_name="$tag" -f name="$tag" -f body="$notes" -F prerelease=$prerelease >/dev/null
+          echo "created release $tag (prerelease=$prerelease)"
 
   release:
     needs: preflight
     # only publish for a tag; a manual run stops after preflight
     if: startsWith(github.ref, 'refs/tags/v')
     strategy:
-      # each target runs goreleaser against the same release, so they must not
-      # race each other to create it
-      max-parallel: 1
+      # preflight creates the release, and goreleaser defaults to keeping an
+      # existing one, so these only upload and can run together
       fail-fast: false
       matrix:
         include:
@@ -74,7 +107,10 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       -
+        # only the darwin target builds on the runner; the others build inside
+        # goreleaser-cross, which brings its own go
         name: setup go
+        if: matrix.target == 'release-mac'
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod

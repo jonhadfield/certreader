@@ -236,6 +236,12 @@ git push --follow-tags
 
 ### required secret
 
+Platform builds run in parallel, so a release takes about as long as its slowest target rather than
+the sum of all five. A prerelease tag (one containing a hyphen, such as `v1.0.0-rc1`) is published as
+a prerelease and does not update the homebrew cask.
+
+Release notes come from the annotated tag message, so write the tag with the notes you want.
+
 The workflow needs a `RELEASE_TOKEN` repository secret: a personal access token with `repo` scope on
 both `jonhadfield/certreader` and `jonhadfield/homebrew-certreader`. The token built into Actions
 cannot write to another repository, and the darwin build pushes the cask update to the tap. Without
