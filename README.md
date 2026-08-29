@@ -1,6 +1,14 @@
 # print TLS certificate info
 
-### This is a fork of the excellent [certinfo](https://github.com/pete911/certinfo) tool with some additional features including pkcs12 support, clipboard reading, and colourised output.
+A fork of the excellent [certinfo](https://github.com/pete911/certinfo), adding:
+
+- **revocation checking** — the OCSP response a server staples to the handshake, and with
+  `-revocation` a live check against the certificate's OCSP responders, falling back to its CRLs
+- **json output** (`-json`) and **exit codes**, so it can be used as a monitoring check rather than
+  only read by a person
+- **PKCS#12/PFX** and **DER** input alongside PEM, and **CSR** reading
+- clipboard input, colourised output, and bare hostnames (`certreader example.com`) defaulting to
+  port 443
 
 [![go](https://github.com/jonhadfield/certreader/actions/workflows/go.yml/badge.svg)](https://github.com/jonhadfield/certreader/actions/workflows/go.yml)
 [![release](https://img.shields.io/github/v/release/jonhadfield/certreader)](https://github.com/jonhadfield/certreader/releases/latest)
