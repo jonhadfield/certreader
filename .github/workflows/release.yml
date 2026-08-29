@@ -60,7 +60,13 @@ jobs:
           case "$tag" in
             *-*) prerelease="--prerelease" ;;
           esac
-          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --title "$tag" --notes-from-tag --verify-tag $prerelease
+          # gh refuses --notes-from-tag alongside --repo, and reading the
+          # annotation here is clearer about where the notes come from
+          notes="$(git tag -l --format='%(contents)' "$tag")"
+          if [ -z "$notes" ]; then
+            notes="$tag"
+          fi
+          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --title "$tag" --notes "$notes" --verify-tag $prerelease
 
   release:
     needs: preflight
