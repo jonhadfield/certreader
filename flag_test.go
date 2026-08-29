@@ -23,6 +23,7 @@ func TestParseFlags(t *testing.T) {
 		assert.False(t, flags.Chains)
 		assert.False(t, flags.Pem)
 		assert.False(t, flags.PemOnly)
+		assert.False(t, flags.JSON)
 		assert.False(t, flags.Version)
 		assert.Empty(t, flags.Args)
 	})
@@ -37,6 +38,7 @@ func TestParseFlags(t *testing.T) {
 			"-chains=true",
 			"-pem=true",
 			"-pem-only=true",
+			"-json=true",
 			"-version=true",
 		}, nil)
 
@@ -49,6 +51,7 @@ func TestParseFlags(t *testing.T) {
 		assert.True(t, flags.Chains)
 		assert.True(t, flags.Pem)
 		assert.True(t, flags.PemOnly)
+		assert.True(t, flags.JSON)
 		assert.True(t, flags.Version)
 		assert.Empty(t, flags.Args)
 	})
@@ -62,6 +65,7 @@ func TestParseFlags(t *testing.T) {
 			"CERTREADER_CHAINS":     "true",
 			"CERTREADER_PEM":        "true",
 			"CERTREADER_PEM_ONLY":   "true",
+			"CERTREADER_JSON":       "true",
 			"CERTREADER_VERSION":    "true",
 		})
 
@@ -74,6 +78,7 @@ func TestParseFlags(t *testing.T) {
 		assert.True(t, flags.Chains)
 		assert.True(t, flags.Pem)
 		assert.True(t, flags.PemOnly)
+		assert.True(t, flags.JSON)
 		assert.True(t, flags.Version)
 		assert.Empty(t, flags.Args)
 	})

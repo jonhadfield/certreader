@@ -26,6 +26,7 @@ type Flags struct {
 	Signature   bool
 	Pem         bool
 	PemOnly     bool
+	JSON        bool
 	Verbose     bool
 	Version     bool
 	More        bool
@@ -68,6 +69,8 @@ func ParseFlags() (Flags, error) {
 		"whether to print pem as well")
 	flagSet.BoolVar(&flags.PemOnly, "pem-only", getBoolEnv("CERTREADER_PEM_ONLY", false),
 		"whether to print only pem (useful for downloading certs from host)")
+	flagSet.BoolVar(&flags.JSON, "json", getBoolEnv("CERTREADER_JSON", false),
+		"output as json (takes precedence over -expiry and -pem-only)")
 	flagSet.StringVar(&flags.PfxPassword, "pfx-password", getStringEnv("CERTREADER_PFX_PASSWORD", ""),
 		"password for PKCS#12/PFX bundles (defaults to empty)")
 	if isClipboardSupported() {
