@@ -1,8 +1,11 @@
 package cert
 
 import (
+	"crypto/x509/pkix"
 	"encoding/asn1"
 	"fmt"
+	"net"
+	"strconv"
 	"strings"
 )
 
@@ -257,8 +260,10 @@ func ToAuthorityInformationAccess(in []byte) ([]AccessDescription, error) {
 	var accesses []AccessDescription
 	for {
 		var out struct {
-			AccessMethod   asn1.ObjectIdentifier
-			AccessLocation asn1.RawValue // TODO parse to general name
+			AccessMethod asn1.ObjectIdentifier
+			// a general name is a CHOICE, so it has to be taken raw and
+			// decoded by tag, which toGeneralName does below
+			AccessLocation asn1.RawValue
 		}
 		rest, err := asn1.Unmarshal(in, &out)
 		if err != nil {
@@ -357,7 +362,9 @@ func ToCertificatePolicies(in []byte) ([]string, error) {
 			// if we find correct oid, use that
 			policy = fmt.Sprintf("%s (%s)", v, policy)
 		}
-		// TODO - policy qualifiers when I find appropriate cert to test
+		if qualifiers := toPolicyQualifiers(out.PolicyQualifiers); len(qualifiers) != 0 {
+			policy = fmt.Sprintf("%s, %s", policy, strings.Join(qualifiers, ", "))
+		}
 
 		policies = append(policies, policy)
 
@@ -367,6 +374,91 @@ func ToCertificatePolicies(in []byte) ([]string, error) {
 		in = rest
 	}
 	return policies, nil
+}
+
+// The two qualifiers RFC 5280 defines. A CPS pointer is a url to the practice
+// statement; a user notice is text meant to be shown to a relying party.
+const (
+	policyQualifierCPS        = "1.3.6.1.5.5.7.2.1"
+	policyQualifierUserNotice = "1.3.6.1.5.5.7.2.2"
+)
+
+// toPolicyQualifiers renders the qualifiers attached to a policy. A qualifier
+// that cannot be read is skipped rather than failing the whole extension, since
+// the policy identifier is the part that matters.
+func toPolicyQualifiers(in asn1.RawValue) []string {
+
+	if len(in.Bytes) == 0 {
+		return nil
+	}
+
+	var out []string
+	rest := in.Bytes
+	for len(rest) != 0 {
+		var qualifier struct {
+			ID    asn1.ObjectIdentifier
+			Value asn1.RawValue
+		}
+		remaining, err := asn1.Unmarshal(rest, &qualifier)
+		if err != nil {
+			return out
+		}
+		rest = remaining
+
+		switch qualifier.ID.String() {
+		case policyQualifierCPS:
+			var uri string
+			if _, err := asn1.Unmarshal(qualifier.Value.FullBytes, &uri); err == nil {
+				out = append(out, fmt.Sprintf("CPS: %s", uri))
+			}
+		case policyQualifierUserNotice:
+			if notice, ok := toUserNotice(qualifier.Value.FullBytes); ok {
+				out = append(out, fmt.Sprintf("User Notice: %s", notice))
+			}
+		default:
+			out = append(out, qualifier.ID.String())
+		}
+	}
+	return out
+}
+
+//	UserNotice ::= SEQUENCE {
+//	    noticeRef     NoticeReference OPTIONAL,
+//	    explicitText  DisplayText OPTIONAL }
+//
+//	NoticeReference ::= SEQUENCE {
+//	    organization   DisplayText,
+//	    noticeNumbers  SEQUENCE OF INTEGER }
+func toUserNotice(in []byte) (string, bool) {
+
+	var notice struct {
+		NoticeRef struct {
+			Organization  asn1.RawValue
+			NoticeNumbers []int
+		} `asn1:"optional"`
+		ExplicitText asn1.RawValue `asn1:"optional"`
+	}
+	if _, err := asn1.Unmarshal(in, &notice); err != nil {
+		return "", false
+	}
+
+	var parts []string
+	if organization := string(notice.NoticeRef.Organization.Bytes); organization != "" {
+		numbers := make([]string, 0, len(notice.NoticeRef.NoticeNumbers))
+		for _, number := range notice.NoticeRef.NoticeNumbers {
+			numbers = append(numbers, strconv.Itoa(number))
+		}
+		parts = append(parts, fmt.Sprintf("%s %s", organization, strings.Join(numbers, ",")))
+	}
+	// DisplayText is a CHOICE of string types, all of which carry their text in
+	// the contents, so the tag does not need distinguishing
+	if text := string(notice.ExplicitText.Bytes); text != "" {
+		parts = append(parts, text)
+	}
+	if len(parts) == 0 {
+		return "", false
+	}
+	return strings.Join(parts, ": "), true
 }
 
 func ToSignedCertificateTimestampList(in []byte) ([]byte, error) {
@@ -442,6 +534,44 @@ type GeneralName struct {
 	Value string
 }
 
+// The tags of the GeneralName CHOICE, in the order the type names above are
+// listed.
+const (
+	generalNameOtherName     = 0
+	generalNameDirectoryName = 4
+	generalNameIPAddress     = 7
+	generalNameRegisteredID  = 8
+)
+
+// toIPAddress renders the octet string an iPAddress general name carries. A
+// name constraint carries an address and a mask together, which is twice the
+// length and rendered as a range.
+func toIPAddress(in []byte) (string, bool) {
+
+	switch len(in) {
+	case net.IPv4len, net.IPv6len:
+		return net.IP(in).String(), true
+	case net.IPv4len * 2:
+		return fmt.Sprintf("%s/%s", net.IP(in[:net.IPv4len]), net.IP(in[net.IPv4len:])), true
+	case net.IPv6len * 2:
+		return fmt.Sprintf("%s/%s", net.IP(in[:net.IPv6len]), net.IP(in[net.IPv6len:])), true
+	default:
+		return "", false
+	}
+}
+
+// toDirectoryName renders the distinguished name a directoryName carries.
+func toDirectoryName(in []byte) (string, bool) {
+
+	var sequence pkix.RDNSequence
+	if _, err := asn1.Unmarshal(in, &sequence); err != nil {
+		return "", false
+	}
+	var name pkix.Name
+	name.FillFromRDNSequence(&sequence)
+	return name.String(), true
+}
+
 //	GeneralName ::= CHOICE {
 //	    otherName                 [0] OtherName ::= SEQUENCE {
 //	        type-id    OBJECT IDENTIFIER,
@@ -464,14 +594,32 @@ type GeneralName struct {
 //	    iPAddress                 [7] OCTET STRING,
 //	    registeredID              [8] OBJECT IDENTIFIER }
 //
-// TODO - general name can be IA5String, ORAddress ... as well
+// The tags carrying IA5String contents are readable as they stand. The rest
+// hold structure, and printing their bytes as text puts binary on the terminal.
 func toGeneralName(in asn1.RawValue) GeneralName {
 	if len(generalNames) <= in.Tag {
 		return GeneralName{}
 	}
 	value := string(in.Bytes)
 
-	if in.Tag == 0 {
+	switch in.Tag {
+	case generalNameIPAddress:
+		// an octet string of four or sixteen bytes, not text
+		if address, ok := toIPAddress(in.Bytes); ok {
+			value = address
+		}
+	case generalNameRegisteredID:
+		var oid asn1.ObjectIdentifier
+		if _, err := asn1.UnmarshalWithParams(in.FullBytes, &oid, "tag:8"); err == nil {
+			value = oid.String()
+		}
+	case generalNameDirectoryName:
+		if name, ok := toDirectoryName(in.Bytes); ok {
+			value = name
+		}
+	}
+
+	if in.Tag == generalNameOtherName {
 		//	OtherName ::= SEQUENCE {
 		//	    type-id OBJECT IDENTIFIER,
 		//	    value   [0] EXPLICIT ANY DEFINED BY type-id }
