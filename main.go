@@ -54,26 +54,26 @@ func main() {
 	}
 	if flags.Revocation && revocationIsRendered(flags) {
 		ctx, cancel := context.WithTimeout(context.Background(), revocationTimeout)
-		defer cancel()
 		locations = locations.CheckRevocation(ctx, nil)
+		// not deferred, because the process exits below without unwinding
+		cancel()
 	}
 
-	if flags.JSON {
+	switch {
+	case flags.JSON:
 		if err := print.JSON(locations, flags.Chains, flags.Pem, flags.Extensions, flags.Signature); err != nil {
 			slog.Error(fmt.Sprintf("writing json: %v", err))
-			os.Exit(1)
+			os.Exit(exitLoadError)
 		}
-		return
-	}
-	if flags.Expiry {
+	case flags.Expiry:
 		print.ExpiryUnified(locations)
-		return
-	}
-	if flags.PemOnly {
+	case flags.PemOnly:
 		print.PemUnified(locations, flags.Chains)
-		return
+	default:
+		print.LocationsUnified(locations, flags.Chains, flags.Pem, flags.Extensions, flags.Signature)
 	}
-	print.LocationsUnified(locations, flags.Chains, flags.Pem, flags.Extensions, flags.Signature)
+
+	os.Exit(exitStatus(locations, flags))
 }
 
 // revocationIsRendered reports whether the selected output would show a
