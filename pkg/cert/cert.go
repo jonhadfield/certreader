@@ -194,13 +194,17 @@ func FromX509Certificates(cs []*x509.Certificate) Certificates {
 // all the certificates will be returned. Supports PEM, DER, and PKCS12 formats.
 func FromBytes(data []byte, password string) (Certificates, error) {
 
-	data = bytes.TrimSpace(data)
-	if len(data) == 0 {
+	// PEM is text, so surrounding whitespace is insignificant. DER and PKCS12
+	// are binary and must be passed through untouched: their last byte is as
+	// likely as any other to be 0x0a or 0x20, and trimming it truncates the
+	// file into a parse error.
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 {
 		return nil, errNoPEMBlock
 	}
 
 	// Try PEM first
-	certificates, err := fromPEMBytes(data)
+	certificates, err := fromPEMBytes(trimmed)
 	if err == nil {
 		return certificates, nil
 	}
