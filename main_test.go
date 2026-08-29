@@ -48,7 +48,7 @@ func TestLoadFromArg_FQDNFallback(t *testing.T) {
 		certPath := filepath.Join(tempDir, "cert.pem")
 		require.NoError(t, os.WriteFile(certPath, createTestCertificatePEM(t, "Test"), 0644))
 
-		location := loadFromArg(certPath, "", false, "")
+		location := loadFromArg(certPath, Flags{})
 		assert.Equal(t, certPath, location.Path)
 		assert.Nil(t, location.Error)
 	})
@@ -57,7 +57,7 @@ func TestLoadFromArg_FQDNFallback(t *testing.T) {
 		tempDir := t.TempDir()
 		missing := filepath.Join(tempDir, "does-not-exist")
 
-		location := loadFromArg(missing, "", false, "")
+		location := loadFromArg(missing, Flags{})
 		assert.Equal(t, missing, location.Path)
 		require.NotNil(t, location.Error)
 		assert.True(t, os.IsNotExist(location.Error))
@@ -68,7 +68,7 @@ func TestLoadFromArg_FQDNFallback(t *testing.T) {
 		// care that we attempted the network path and preserved the original arg.
 		arg := "certreader-test.invalid"
 
-		location := loadFromArg(arg, "", false, "")
+		location := loadFromArg(arg, Flags{})
 		assert.Equal(t, arg, location.Path)
 		assert.NotNil(t, location.Error, "expected network error for reserved TLD")
 	})
@@ -117,7 +117,7 @@ func TestLoadFromArgs_Concurrent(t *testing.T) {
 		require.NoError(t, os.WriteFile(cert3Path, testCertPEM, 0644))
 
 		args := []string{cert1Path, cert2Path, cert3Path}
-		locations := loadFromArgs(args, "", false, "")
+		locations := loadFromArgs(args, Flags{})
 
 		require.Len(t, locations, 3)
 		assert.Equal(t, cert1Path, locations[0].Path)
@@ -134,7 +134,7 @@ func TestLoadFromArgs_Concurrent(t *testing.T) {
 		require.NoError(t, os.WriteFile(validPath, testCertPEM, 0644))
 
 		args := []string{validPath, invalidPath}
-		locations := loadFromArgs(args, "", false, "")
+		locations := loadFromArgs(args, Flags{})
 
 		require.Len(t, locations, 2)
 		// Valid cert should have no error
@@ -144,7 +144,7 @@ func TestLoadFromArgs_Concurrent(t *testing.T) {
 	})
 
 	t.Run("given empty args, when loadFromArgs called, then empty list returned", func(t *testing.T) {
-		locations := loadFromArgs([]string{}, "", false, "")
+		locations := loadFromArgs([]string{}, Flags{})
 		assert.Empty(t, locations)
 	})
 }

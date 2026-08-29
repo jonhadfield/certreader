@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jonhadfield/certreader/pkg/cert"
 	"golang.design/x/clipboard"
 )
 
@@ -26,25 +27,28 @@ type Flags struct {
 	ExpiringWithin string
 	ExpiringWindow time.Duration
 	ServerName     string
-	Insecure       bool
-	Revocation     bool
-	Chains         bool
-	Extensions     bool
-	Signature      bool
-	Pem            bool
-	PemOnly        bool
-	JSON           bool
-	Verbose        bool
-	Version        bool
-	More           bool
-	Clipboard      bool
-	PfxPassword    string
-	Args           []string
+	// StartTLS names a protocol to upgrade from plaintext, empty for direct TLS.
+	StartTLS    cert.StartTLSProtocol
+	Insecure    bool
+	Revocation  bool
+	Chains      bool
+	Extensions  bool
+	Signature   bool
+	Pem         bool
+	PemOnly     bool
+	JSON        bool
+	Verbose     bool
+	Version     bool
+	More        bool
+	Clipboard   bool
+	PfxPassword string
+	Args        []string
 }
 
 func ParseFlags() (Flags, error) {
 
 	var flags Flags
+	var startTLS string
 	flagSet := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
 	flagSet.BoolVar(&flags.CSR, "csr", getBoolEnv("CERTREADER_CSR", false),
 		"force CSR mode (optional - CSRs are auto-detected)")
@@ -64,6 +68,8 @@ func ParseFlags() (Flags, error) {
 		"exit non-zero if any certificate expires within this window, e.g. 30d, 2w, 72h")
 	flagSet.StringVar(&flags.ServerName, "server-name", getStringEnv("CERTREADER_SERVER_NAME", ""),
 		"verify the hostname on the returned certificates, useful for testing SNI")
+	flagSet.StringVar(&startTLS, "starttls", getStringEnv("CERTREADER_STARTTLS", ""),
+		fmt.Sprintf("upgrade a plaintext connection to tls, one of: %s", strings.Join(cert.StartTLSProtocols(), ", ")))
 	flagSet.BoolVar(&flags.Insecure, "insecure", getBoolEnv("CERTREADER_INSECURE", false),
 		"whether a client verifies the server's certificate chain and host name (only applicable for host)")
 	flagSet.BoolVar(&flags.Revocation, "revocation", getBoolEnv("CERTREADER_REVOCATION", false),
@@ -102,6 +108,12 @@ func ParseFlags() (Flags, error) {
 		return Flags{}, err
 	}
 	flags.Args = flagSet.Args()
+
+	protocol, err := cert.ParseStartTLSProtocol(startTLS)
+	if err != nil {
+		return Flags{}, fmt.Errorf("-starttls: %w", err)
+	}
+	flags.StartTLS = protocol
 
 	if flags.ExpiringWithin != "" {
 		window, err := parseExpiryWindow(flags.ExpiringWithin)

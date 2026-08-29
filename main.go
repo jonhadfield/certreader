@@ -101,7 +101,7 @@ func LoadLocations(flags Flags) cert.Locations {
 	}
 
 	if len(flags.Args) > 0 {
-		locations = append(locations, loadFromArgs(flags.Args, flags.ServerName, flags.Insecure, flags.PfxPassword)...)
+		locations = append(locations, loadFromArgs(flags.Args, flags)...)
 	}
 
 	if isStdin() {
@@ -120,7 +120,7 @@ func LoadLocations(flags Flags) cert.Locations {
 	return nil
 }
 
-func loadFromArgs(args []string, serverName string, insecure bool, password string) cert.Locations {
+func loadFromArgs(args []string, flags Flags) cert.Locations {
 	type result struct {
 		arg      string
 		location cert.Location
@@ -132,7 +132,7 @@ func loadFromArgs(args []string, serverName string, insecure bool, password stri
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				out <- result{arg: arg, location: loadFromArg(arg, serverName, insecure, password)}
+				out <- result{arg: arg, location: loadFromArg(arg, flags)}
 			}()
 		}
 		wg.Wait()
@@ -153,16 +153,25 @@ func loadFromArgs(args []string, serverName string, insecure bool, password stri
 	return locationsSortedByArgs
 }
 
-func loadFromArg(arg, serverName string, insecure bool, password string) cert.Location {
+func loadFromArg(arg string, flags Flags) cert.Location {
 	if isTCPNetworkAddress(arg) {
-		return cert.LoadFromNetwork(arg, serverName, insecure)
+		return cert.LoadFromNetwork(arg, flags.ServerName, flags.Insecure, flags.StartTLS)
 	}
 	if _, err := os.Stat(arg); err != nil && os.IsNotExist(err) && looksLikeFQDN(arg) {
-		location := cert.LoadFromNetwork(arg+":443", serverName, insecure)
+		location := cert.LoadFromNetwork(arg+":"+defaultPort(flags.StartTLS), flags.ServerName, flags.Insecure, flags.StartTLS)
 		location.Path = arg
 		return location
 	}
-	return cert.LoadFromFile(arg, password)
+	return cert.LoadFromFile(arg, flags.PfxPassword)
+}
+
+// defaultPort is the port assumed for a bare hostname. Without -starttls that
+// is https, otherwise the port the named protocol normally listens on.
+func defaultPort(protocol cert.StartTLSProtocol) string {
+	if port := protocol.DefaultPort(); port != "" {
+		return port
+	}
+	return "443"
 }
 
 func maybePromptForPFXPasswords(locations cert.Locations, flags *Flags) cert.Locations {
