@@ -80,6 +80,13 @@ func printCertificate(certificate cert.Certificate, printExtensions, printSignat
 	fmt.Printf("%s: %s\n", AttributeName("Ext Key Usage"), strings.Join(certificate.ExtKeyUsage(), ", "))
 	fmt.Printf("%s: %t\n", AttributeName("CA"), certificate.IsCA())
 
+	if warnings := certificate.Warnings(); len(warnings) > 0 {
+		fmt.Printf("%s\n", AttributeName("Warnings"))
+		for _, warning := range warnings {
+			fmt.Printf("    %s\n", WarningText(warning.Message))
+		}
+	}
+
 	if printExtensions {
 		fmt.Printf("%s:\n", AttributeName("Extensions"))
 		for _, extension := range certificate.Extensions() {

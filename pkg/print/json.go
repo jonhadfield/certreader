@@ -54,8 +54,17 @@ type jsonCertificate struct {
 	ExtKeyUsage        []string        `json:"ext_key_usage,omitempty"`
 	IsCA               *bool           `json:"is_ca,omitempty"`
 	Extensions         []jsonExtension `json:"extensions,omitempty"`
-	Signature          string          `json:"signature,omitempty"`
-	PEM                string          `json:"pem,omitempty"`
+	// Warnings is present whenever the certificate has any, regardless of flags,
+	// since a consumer would not think to ask for them.
+	Warnings  []jsonWarning `json:"warnings,omitempty"`
+	Signature string        `json:"signature,omitempty"`
+	PEM       string        `json:"pem,omitempty"`
+}
+
+type jsonWarning struct {
+	// Code is stable, so a check can match on it rather than on the message.
+	Code    string `json:"code"`
+	Message string `json:"message"`
 }
 
 type jsonCSR struct {
@@ -220,6 +229,9 @@ func buildCertificate(certificate cert.Certificate, printPem, printExtensions, p
 
 	if printExtensions {
 		out.Extensions = buildExtensions(certificate.Extensions())
+	}
+	for _, warning := range certificate.Warnings() {
+		out.Warnings = append(out.Warnings, jsonWarning{Code: warning.Code, Message: warning.Message})
 	}
 	if printSignature {
 		out.Signature = certificate.Signature()
