@@ -48,6 +48,7 @@ certreader [flags] [<file>|<host:port> ...]
 | -revocation   | check revocation status via OCSP, falling back to CRL (makes network requests)                    |
 | -server-name  | verify the hostname on the returned certificates, useful for testing SNI                          |
 | -signature    | whether to print signature                                                                        |
+| -starttls     | upgrade a plaintext connection to tls: smtp, imap, pop3, ftp, nntp, ldap, postgres                |
 | -sort-expiry  | sort certificates by expiration date                                                              |
 | -subject-like | print certificates with issuer field containing supplied string                                   |
 | -more         | use a combination of the '-pem -signature -chains' flags                                          |
@@ -58,6 +59,40 @@ certreader [flags] [<file>|<host:port> ...]
 When a PKCS#12/PFX input requires a password and no `--pfx-password` value is supplied, `certreader` prompts on the
 terminal; set the flag or `CERTREADER_PFX_PASSWORD` for non-interactive usage.
 ```
+
+## starttls
+
+Mail, directory and database servers usually begin in plaintext and upgrade to TLS on request, so a
+direct handshake cannot reach their certificates. `-starttls` performs the upgrade first:
+
+```shell script
+certreader -starttls smtp smtp.gmail.com:587
+```
+
+```
+--- [smtp.gmail.com:587 TLS 1.3] ---
+Subject: CN=smtp.gmail.com
+Issuer: CN=WR2,O=Google Trust Services,C=US
+```
+
+Supported protocols, and the port assumed when only a hostname is given:
+
+| protocol | port |
+|----------|------|
+| smtp | 587 |
+| imap | 143 |
+| pop3 | 110 |
+| ftp | 21 |
+| nntp | 119 |
+| ldap | 389 |
+| postgres | 5432 |
+
+So `certreader -starttls imap mail.example.com` connects to port 143, where the same argument without
+`-starttls` would use 443. For smtp the submission port is assumed rather than 25, since that is
+where a certificate is usually being inspected; give `host:25` explicitly for the relay port.
+
+This applies to network arguments only, and combines with everything else — `-json`, `-revocation`
+and `-expiring-within` all work the same over an upgraded connection.
 
 ## exit codes
 

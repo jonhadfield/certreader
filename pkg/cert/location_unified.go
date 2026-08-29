@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"slices"
+	"time"
 )
 
 // ContentType indicates whether content is a certificate or CSR
@@ -237,12 +238,23 @@ func (l Location) leafAndIssuer() (leaf, issuer *x509.Certificate) {
 	return leaf, nil
 }
 
-// LoadFromNetwork loads certificates from a network address
-func LoadFromNetwork(addr string, serverName string, tlsSkipVerify bool) Location {
-	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: tlsDialTimeout}, "tcp", addr, &tls.Config{
+// LoadFromNetwork loads certificates from a network address. When startTLS
+// names a protocol the connection begins in plaintext and is upgraded, rather
+// than handshaking immediately.
+func LoadFromNetwork(addr string, serverName string, tlsSkipVerify bool, startTLS StartTLSProtocol) Location {
+
+	config := &tls.Config{
 		InsecureSkipVerify: tlsSkipVerify,
 		ServerName:         serverName,
-	})
+	}
+
+	var conn *tls.Conn
+	var err error
+	if startTLS == StartTLSNone {
+		conn, err = tls.DialWithDialer(&net.Dialer{Timeout: tlsDialTimeout}, "tcp", addr, config)
+	} else {
+		conn, err = dialStartTLS(addr, config, startTLS)
+	}
 	if err != nil {
 		slog.Error(fmt.Sprintf("load certificate from network %s: %v", addr, err.Error()))
 		return Location{Path: addr, Error: err}
@@ -258,6 +270,47 @@ func LoadFromNetwork(addr string, serverName string, tlsSkipVerify bool) Locatio
 		Certificates: FromX509Certificates(x509Certificates),
 		OCSPStaple:   connectionState.OCSPResponse,
 	}
+}
+
+// dialStartTLS connects in plaintext, asks the server to begin TLS, and then
+// completes the handshake over the same connection.
+func dialStartTLS(addr string, config *tls.Config, protocol StartTLSProtocol) (*tls.Conn, error) {
+
+	raw, err := net.DialTimeout("tcp", addr, tlsDialTimeout)
+	if err != nil {
+		return nil, err
+	}
+
+	// one budget for the negotiation and the handshake, so a server that
+	// answers slowly cannot hang the whole run
+	if err := raw.SetDeadline(time.Now().Add(tlsDialTimeout)); err != nil {
+		raw.Close()
+		return nil, err
+	}
+
+	if err := negotiateStartTLS(raw, protocol); err != nil {
+		raw.Close()
+		return nil, err
+	}
+
+	// tls.Dial infers this from the address, tls.Client does not
+	if config.ServerName == "" {
+		host, _, splitErr := net.SplitHostPort(addr)
+		if splitErr == nil {
+			config.ServerName = host
+		}
+	}
+
+	conn := tls.Client(raw, config)
+	if err := conn.Handshake(); err != nil {
+		raw.Close()
+		return nil, err
+	}
+	if err := raw.SetDeadline(time.Time{}); err != nil {
+		raw.Close()
+		return nil, err
+	}
+	return conn, nil
 }
 
 // LoadFromFile loads certificates or CSRs from a file with auto-detection

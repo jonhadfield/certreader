@@ -2,6 +2,8 @@ package main
 
 import (
 	"os"
+
+	"github.com/jonhadfield/certreader/pkg/cert"
 	"testing"
 	"time"
 
@@ -25,6 +27,7 @@ func TestParseFlags(t *testing.T) {
 		assert.False(t, flags.Pem)
 		assert.False(t, flags.PemOnly)
 		assert.False(t, flags.JSON)
+		assert.Empty(t, flags.StartTLS)
 		assert.Empty(t, flags.ExpiringWithin)
 		assert.Zero(t, flags.ExpiringWindow)
 		assert.False(t, flags.Version)
@@ -176,4 +179,45 @@ func TestParseFlagsExpiringWithin(t *testing.T) {
 
 		assert.Empty(t, flags.ExpiringWithin, "empty is what keeps a zero window meaningful")
 	})
+}
+
+func TestParseFlagsStartTLS(t *testing.T) {
+
+	t.Run("given a supported protocol then it is parsed", func(t *testing.T) {
+		setInput(t, []string{"flag", "-starttls=smtp"}, nil)
+
+		flags, err := ParseFlags()
+		require.NoError(t, err)
+		assert.Equal(t, cert.StartTLSSMTP, flags.StartTLS)
+	})
+
+	t.Run("given the env var then it is parsed", func(t *testing.T) {
+		setInput(t, []string{"flag"}, map[string]string{"CERTREADER_STARTTLS": "imap"})
+
+		flags, err := ParseFlags()
+		require.NoError(t, err)
+		assert.Equal(t, cert.StartTLSIMAP, flags.StartTLS)
+	})
+
+	t.Run("given an unsupported protocol then parsing fails", func(t *testing.T) {
+		setInput(t, []string{"flag", "-starttls=telnet"}, nil)
+
+		_, err := ParseFlags()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "-starttls")
+	})
+
+	t.Run("given no protocol then direct tls is used", func(t *testing.T) {
+		setInput(t, []string{"flag"}, nil)
+
+		flags, err := ParseFlags()
+		require.NoError(t, err)
+		assert.Equal(t, cert.StartTLSNone, flags.StartTLS)
+	})
+}
+
+func Test_defaultPort(t *testing.T) {
+	assert.Equal(t, "443", defaultPort(cert.StartTLSNone))
+	assert.Equal(t, "587", defaultPort(cert.StartTLSSMTP))
+	assert.Equal(t, "389", defaultPort(cert.StartTLSLDAP))
 }
