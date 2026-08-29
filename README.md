@@ -95,6 +95,38 @@ where a certificate is usually being inspected; give `host:25` explicitly for th
 This applies to network arguments only, and combines with everything else — `-json`, `-revocation`
 and `-expiring-within` all work the same over an upgraded connection.
 
+## warnings
+
+Weaknesses are reported alongside the certificate, without needing a flag:
+
+```
+Warnings
+    signed with SHA1-RSA, which is no longer considered sound
+    1024 bit rsa key, below the 2048 bit minimum
+    valid for 800 days, beyond the 398 day maximum for server certificates
+    no subject alternative name, which browsers require and will not read from the common name
+```
+
+| code | reported when |
+|------|---------------|
+| `weak-signature-algorithm` | signed with MD2, MD5 or SHA-1 |
+| `small-key` | RSA below 2048 bits, ECDSA below 256, or DSA at all |
+| `long-validity` | a server certificate valid for more than 398 days |
+| `missing-subject-alt-name` | a server certificate with no DNS name or IP address |
+
+Each warning carries a stable `code` in `-json` output, so a check can match on that rather than on
+the wording.
+
+They are deliberately quiet where a property is only weak out of context. A root's own signature is
+not reported, because a root is trusted by being in a trust store rather than by its signature, so
+flagging every SHA-1 era root would be noise. The validity and name rules apply only to certificates
+offered for server authentication, and only from September 2020, when the 398 day limit took effect —
+certificates issued before it were legitimately longer lived.
+
+Warnings do not affect the exit code. Whether a weak certificate should fail a check is a policy
+decision, and quietly changing what an existing `-expiring-within` check returns would be the wrong
+way to make it.
+
 ## exit codes
 
 | code | meaning |

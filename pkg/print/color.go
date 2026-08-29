@@ -91,3 +91,9 @@ func OCSPStatus(status string) string {
 		return expiringDateColor(status)
 	}
 }
+
+// WarningText colorizes a weak crypto warning (Yellow), matching how a
+// certificate close to expiry is drawn.
+func WarningText(message string) string {
+	return expiringDateColor(message)
+}
