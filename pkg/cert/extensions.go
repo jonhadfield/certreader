@@ -179,15 +179,59 @@ func parseAuthorityInformationAccess(in []byte) (string, []string, error) {
 	return name, fields, nil
 }
 
+// SignedCertificateTimestampList ::= OCTET STRING wrapping the TLS encoded
+// list defined by RFC 6962 section 3.3.
 func parseSignedCertificateTimestampList(in []byte) (string, []string, error) {
+
 	name := "CT Precertificate SCTs"
-	return name, []string{"..."}, nil
-	// TODO parse "Certificate Transparency", validate against openssl x509 output
-	//out, err := ToSignedCertificateTimestampList(in)
-	//if err != nil {
-	//	return name, nil, err
-	//}
-	//return name, []string{formatHexArray(out)}, nil
+	out, err := ToSignedCertificateTimestamps(in)
+	if err != nil {
+		return name, nil, err
+	}
+
+	// laid out as openssl x509 -text does, so the two can be compared
+	var fields []string
+	for _, sct := range out {
+		fields = append(fields,
+			"Signed Certificate Timestamp:",
+			"    Version   : "+sct.VersionName(),
+			"    Log ID    : "+formatHexArray(sct.LogID),
+			"    Timestamp : "+sct.Timestamp.Format("Jan _2 15:04:05.000 2006 MST"),
+			"    Extensions: "+sctExtensions(sct.Extensions),
+			"    Signature : "+sct.SignatureAlgorithmName(),
+		)
+		for _, line := range hexLines(sct.Signature, 16) {
+			fields = append(fields, "                "+line)
+		}
+	}
+	return name, fields, nil
+}
+
+func sctExtensions(in []byte) string {
+	if len(in) == 0 {
+		return "none"
+	}
+	return formatHexArray(in)
+}
+
+// hexLines splits a long value across lines, since a signature on one line is
+// unreadable. A continued line keeps its trailing separator, as openssl does,
+// so it is clear the value has not ended.
+func hexLines(in []byte, perLine int) []string {
+
+	var out []string
+	for start := 0; start < len(in); start += perLine {
+		end := start + perLine
+		if end > len(in) {
+			end = len(in)
+		}
+		line := formatHexArray(in[start:end])
+		if end < len(in) {
+			line += ":"
+		}
+		out = append(out, line)
+	}
+	return out
 }
 
 // BasicConstraints ::= SEQUENCE {

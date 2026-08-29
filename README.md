@@ -266,6 +266,26 @@ targets and the configs in `.goreleaser/`, building darwin on the host and linux
 
 `certreader --pem-only --no-expired <chain-file>.pem > <new-chain-file>.pem`
 
+### certificate transparency
+
+`-extensions` decodes the embedded SCTs, which prove the certificate was submitted to public
+certificate transparency logs:
+
+```
+CT Precertificate SCTs (1.3.6.1.4.1.11129.2.4.2)
+    Signed Certificate Timestamp:
+        Version   : v1 (0x0)
+        Log ID    : C2:31:7E:57:45:19:A3:45:EE:7F:38:DE:B2:90:41:EB:C7:C2:21:5A:22:BF:7F:D5:B5:AD:76:9A:D9:0E:52:CD
+        Timestamp : Aug 10 06:13:28.444 2026 UTC
+        Extensions: none
+        Signature : ECDSA-SHA256
+                    30:44:02:20:30:D0:33:28:8F:49:A6:B2:00:9E:5D:77:
+                    ...
+```
+
+The log is identified by the SHA-256 hash of its public key; there is no name, since mapping ids to
+names needs a list that goes stale.
+
 ### info/verbose
 
 `certreader vault.com:443`

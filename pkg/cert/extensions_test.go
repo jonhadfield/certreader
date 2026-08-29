@@ -83,12 +83,11 @@ func TestParseBasicConstraints(t *testing.T) {
 }
 
 func TestParseSignedCertificateTimestampList(t *testing.T) {
-	t.Run("when parseSignedCertificateTimestampList called, then placeholder returned", func(t *testing.T) {
-		// This is a TODO in the codebase, so it just returns placeholder
-		name, values, err := parseSignedCertificateTimestampList([]byte{0x30, 0x00})
-		require.NoError(t, err)
+	t.Run("given an empty octet string, when parseSignedCertificateTimestampList called, then error returned", func(t *testing.T) {
+		// this used to return a placeholder while the parsing was a TODO
+		name, _, err := parseSignedCertificateTimestampList([]byte{0x30, 0x00})
+		require.Error(t, err)
 		assert.Equal(t, "CT Precertificate SCTs", name)
-		assert.Contains(t, values[0], "...")
 	})
 }
 
