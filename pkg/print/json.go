@@ -98,16 +98,19 @@ type jsonRevocation struct {
 	Status string `json:"status"`
 	// Source is "stapled OCSP", "OCSP responder" or "CRL", absent when no
 	// source produced a verdict.
-	Source            string              `json:"source,omitempty"`
-	URL               string              `json:"url,omitempty"`
-	SerialNumber      string              `json:"serial_number,omitempty"`
-	RevokedAt         *time.Time          `json:"revoked_at,omitempty"`
-	RevocationReason  string              `json:"revocation_reason,omitempty"`
-	ProducedAt        *time.Time          `json:"produced_at,omitempty"`
-	ThisUpdate        *time.Time          `json:"this_update,omitempty"`
-	NextUpdate        *time.Time          `json:"next_update,omitempty"`
-	SignatureVerified bool                `json:"signature_verified"`
-	Stale             bool                `json:"stale"`
+	Source            string     `json:"source,omitempty"`
+	URL               string     `json:"url,omitempty"`
+	SerialNumber      string     `json:"serial_number,omitempty"`
+	RevokedAt         *time.Time `json:"revoked_at,omitempty"`
+	RevocationReason  string     `json:"revocation_reason,omitempty"`
+	ProducedAt        *time.Time `json:"produced_at,omitempty"`
+	ThisUpdate        *time.Time `json:"this_update,omitempty"`
+	NextUpdate        *time.Time `json:"next_update,omitempty"`
+	SignatureVerified bool       `json:"signature_verified"`
+	Stale             bool       `json:"stale"`
+	// IssuerFetchedFrom is set when the issuer was not presented alongside the
+	// certificate and had to be downloaded.
+	IssuerFetchedFrom string              `json:"issuer_fetched_from,omitempty"`
 	Attempts          []jsonRevocationTry `json:"not_answered,omitempty"`
 }
 
@@ -303,6 +306,7 @@ func buildRevocation(status *cert.RevocationStatus) *jsonRevocation {
 		NextUpdate:        timeOrNil(status.NextUpdate),
 		SignatureVerified: status.SignatureVerified,
 		Stale:             status.IsStale(),
+		IssuerFetchedFrom: status.IssuerFetchedFrom,
 	}
 	for _, attempt := range status.Attempts {
 		try := jsonRevocationTry{Source: string(attempt.Source), URL: attempt.URL}

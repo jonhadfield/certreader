@@ -121,7 +121,7 @@ func TestRevocationCheckerOCSP(t *testing.T) {
 		assert.Equal(t, revokedAt, status.RevokedAt.UTC())
 	})
 
-	t.Run("given no issuer then OCSP is skipped because no request can be built", func(t *testing.T) {
+	t.Run("given no issuer and nowhere to fetch one then OCSP is skipped", func(t *testing.T) {
 		responder := newStubServer(t)
 		chain := newOCSPTestChain(t, withOCSPServer(responder.URL))
 
@@ -129,8 +129,13 @@ func TestRevocationCheckerOCSP(t *testing.T) {
 
 		assert.True(t, status.IsUnknown())
 		assert.Equal(t, int64(0), responder.calls.Load(), "no request should be attempted")
-		require.NotEmpty(t, status.Attempts)
-		assert.Contains(t, status.Attempts[0].Err.Error(), "issuer certificate unavailable")
+		require.Len(t, status.Attempts, 3)
+
+		// the fetch is tried first, because everything else depends on it
+		assert.Equal(t, RevocationSourceIssuer, status.Attempts[0].Source)
+		assert.Contains(t, status.Attempts[0].Err.Error(), "names no issuer url")
+		assert.Contains(t, status.Attempts[1].Err.Error(), "issuer certificate unavailable")
+		assert.Empty(t, status.IssuerFetchedFrom)
 	})
 
 	t.Run("given a certificate naming no responder then the attempt is recorded", func(t *testing.T) {
