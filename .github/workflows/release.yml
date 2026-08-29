@@ -52,21 +52,26 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
           tag="${GITHUB_REF_NAME}"
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" >/dev/null 2>&1; then
             echo "release $tag already exists, leaving it alone"
             exit 0
           fi
-          prerelease=""
+          # a tag carrying a hyphen is a prerelease, matching what goreleaser
+          # would have decided for itself
+          prerelease=false
           case "$tag" in
-            *-*) prerelease="--prerelease" ;;
+            *-*) prerelease=true ;;
           esac
-          # gh refuses --notes-from-tag alongside --repo, and reading the
-          # annotation here is clearer about where the notes come from
+          # the annotation is the release body. gh refuses --notes-from-tag
+          # alongside --repo, and reading it here says plainly where it comes from
           notes="$(git tag -l --format='%(contents)' "$tag")"
           if [ -z "$notes" ]; then
             notes="$tag"
           fi
-          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --title "$tag" --notes "$notes" --verify-tag $prerelease
+          # the rest api rather than gh release create, which uses graphql and
+          # so fails against a spent graphql budget while rest is still fine
+          gh api "repos/$GITHUB_REPOSITORY/releases" --method POST -f tag_name="$tag" -f name="$tag" -f body="$notes" -F prerelease=$prerelease >/dev/null
+          echo "created release $tag (prerelease=$prerelease)"
 
   release:
     needs: preflight
