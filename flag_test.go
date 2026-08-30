@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"os"
 
 	"github.com/jonhadfield/certreader/pkg/cert"
@@ -120,7 +121,48 @@ func TestParseFlags(t *testing.T) {
 	})
 }
 
+func TestFilterFlagDescriptions(t *testing.T) {
+	// The two descriptions were each other's: -subject-like said it matched
+	// the issuer field, and -issuer-like the subject. Both filters have always
+	// worked on the field they are named for, so only the help was wrong,
+	// which is the worse way round. The flag that does what you want is the
+	// one the help talks you out of picking.
+	t.Run("given the usage text, then each filter flag describes the field it filters on", func(t *testing.T) {
+		setInput(t, nil, nil)
+
+		flags, err := ParseFlags()
+		require.NoError(t, err)
+
+		usage := captureStderr(t, flags.Usage)
+
+		assert.Regexp(t, `-subject-like string\n\s+print certificates with subject field`, usage)
+		assert.Regexp(t, `-issuer-like string\n\s+print certificates with issuer field`, usage)
+	})
+}
+
 // --- helper functions ---
+
+// captureStderr collects what a function writes to stderr, which is where the
+// flag package prints usage.
+func captureStderr(t *testing.T, write func()) string {
+	t.Helper()
+
+	reader, writer, err := os.Pipe()
+	require.NoError(t, err)
+
+	original := os.Stderr
+	os.Stderr = writer
+	defer func() { os.Stderr = original }()
+
+	write()
+	require.NoError(t, writer.Close())
+
+	captured, err := io.ReadAll(reader)
+	require.NoError(t, err)
+	require.NoError(t, reader.Close())
+
+	return string(captured)
+}
 
 func setInput(t *testing.T, args []string, env map[string]string) {
 
