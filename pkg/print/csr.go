@@ -7,20 +7,6 @@ import (
 	"strings"
 )
 
-func CSRLocations(csrLocations []cert.CSRLocation, printPem, printExtensions, printSignature bool) {
-	for _, csrLocation := range csrLocations {
-		if csrLocation.Error != nil {
-			slog.Error(fmt.Sprintf("%s: %v", csrLocation.Name(), csrLocation.Error))
-			fmt.Printf("--- [%s: %v] ---\n", csrLocation.Name(), csrLocation.Error)
-			fmt.Println()
-			continue
-		}
-
-		fmt.Printf("--- [%s] ---\n", csrLocation.Name())
-		printCSRs(csrLocation.CSRs, printPem, printExtensions, printSignature)
-	}
-}
-
 func printCSRs(csrs cert.CSRs, printPem, printExtensions, printSignature bool) {
 	for _, csr := range csrs {
 		printCSR(csr, printExtensions, printSignature)
