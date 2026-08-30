@@ -249,6 +249,9 @@ func printVerification(location cert.Location) {
 	if result.Hostname != "" {
 		fmt.Printf("    %s: %s\n", SubAttributeName("Hostname"), result.Hostname)
 	}
+	for _, warning := range result.ChainWarnings {
+		fmt.Printf("    %s: %s\n", SubAttributeName("Chain"), WarningText(warning.Message))
+	}
 	for _, problem := range result.Problems {
 		fmt.Printf("    %s: %s\n", SubAttributeName("Reason"), WarningText(problem.Message))
 		if problem.Subject != "" {

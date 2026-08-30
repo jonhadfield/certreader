@@ -330,3 +330,24 @@ func TestChainsAndVerifyShareOneImplementation(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
+
+// selfSignedCertificate builds a certificate that is its own issuer.
+func selfSignedCertificate(t *testing.T, commonName string) *x509.Certificate {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(11),
+		Subject:      pkix.Name{CommonName: commonName},
+		DNSNames:     []string{commonName},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(24 * time.Hour),
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, key.Public(), key)
+	require.NoError(t, err)
+	parsed, err := x509.ParseCertificate(der)
+	require.NoError(t, err)
+	return parsed
+}

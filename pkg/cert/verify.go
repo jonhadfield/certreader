@@ -21,6 +21,9 @@ type VerificationResult struct {
 	Chains int
 	// Problems is why verification failed, empty when it succeeded.
 	Problems []VerificationProblem
+	// ChainWarnings is how the served chain is put together. These do not make
+	// verification fail: a chain can be valid and still be built badly.
+	ChainWarnings []Warning
 }
 
 // VerificationProblem is one reason verification failed.
@@ -61,6 +64,8 @@ func (l Location) Verify() VerificationResult {
 		})
 		return result
 	}
+
+	result.ChainWarnings = l.ChainWarnings()
 
 	opts, err := l.verifyOptions()
 	if err != nil {
