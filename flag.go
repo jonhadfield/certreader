@@ -71,9 +71,9 @@ func ParseFlags() (Flags, error) {
 	flagSet.BoolVar(&flags.SortExpiry, "sort-expiry", getBoolEnv("CERTREADER_SORT_EXPIRY", false),
 		"sort certificates by expiration date")
 	flagSet.StringVar(&flags.SubjectLike, "subject-like", getStringEnv("CERTREADER_SUBJECT_LIKE", ""),
-		"print certificates with issuer field containing supplied string")
-	flagSet.StringVar(&flags.IssuerLike, "issuer-like", getStringEnv("CERTREADER_ISSUER_LIKE", ""),
 		"print certificates with subject field containing supplied string")
+	flagSet.StringVar(&flags.IssuerLike, "issuer-like", getStringEnv("CERTREADER_ISSUER_LIKE", ""),
+		"print certificates with issuer field containing supplied string")
 	flagSet.StringVar(&flags.ExpiringWithin, "expiring-within", getStringEnv("CERTREADER_EXPIRING_WITHIN", ""),
 		"exit non-zero if any certificate expires within this window, e.g. 30d, 2w, 72h")
 	flagSet.StringVar(&flags.ServerName, "server-name", getStringEnv("CERTREADER_SERVER_NAME", ""),

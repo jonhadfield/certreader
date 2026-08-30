@@ -39,6 +39,40 @@ func certificateExpiring(in time.Duration, issuer string) Certificate {
 	}}
 }
 
+// certificateNamed builds a certificate whose subject and issuer are plainly
+// different, so a filter matching the wrong one shows up.
+func certificateNamed(t *testing.T, subjectCN, issuerCN string) Certificate {
+	t.Helper()
+
+	subject := pkix.Name{CommonName: subjectCN}
+	rawSubject, err := asn1.Marshal(subject.ToRDNSequence())
+	require.NoError(t, err)
+
+	return Certificate{x509Certificate: &x509.Certificate{
+		NotAfter:   time.Now().Add(24 * time.Hour),
+		Subject:    subject,
+		RawSubject: rawSubject,
+		Issuer:     pkix.Name{CommonName: issuerCN},
+	}}
+}
+
+func TestFiltersMatchTheFieldTheyAreNamedFor(t *testing.T) {
+	// The help for these two flags described the other one's field for as long
+	// as they existed. The filters themselves were right, and this is what
+	// says so.
+	certificates := Certificates{certificateNamed(t, "leaf.example.com", "Issuing CA")}
+
+	t.Run("given a subject to match, when SubjectLike is called, then it matches on the subject alone", func(t *testing.T) {
+		assert.Len(t, certificates.SubjectLike("leaf.example.com"), 1)
+		assert.Empty(t, certificates.SubjectLike("Issuing CA"))
+	})
+
+	t.Run("given an issuer to match, when IssuerLike is called, then it matches on the issuer alone", func(t *testing.T) {
+		assert.Len(t, certificates.IssuerLike("Issuing CA"), 1)
+		assert.Empty(t, certificates.IssuerLike("leaf.example.com"))
+	})
+}
+
 func TestFiltersTolerateUnparseableBlocks(t *testing.T) {
 	// A bundle where one block failed to parse is read happily without a
 	// filter, so every filter has to cope with one. Reaching for the issuer or

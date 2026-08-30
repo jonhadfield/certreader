@@ -40,7 +40,7 @@ certreader [flags] [<file>|<host:port> ...]
 | -fail-on-warning | exit non-zero if any certificate or chain warning is reported                                   |
 | -extensions   | whether to print extensions                                                                       |
 | -insecure     | whether a client verifies the server's certificate chain and host name (only applicable for host) |
-| -issuer-like  | print certificates with subject field containing supplied string                                  |
+| -issuer-like  | print certificates with issuer field containing supplied string                                   |
 | -json         | output as json (takes precedence over -expiry and -pem-only)                                      |
 | -no-duplicate | do not print duplicate certificates                                                               |
 | -no-expired   | do not print expired certificates                                                                 |
@@ -52,7 +52,7 @@ certreader [flags] [<file>|<host:port> ...]
 | -signature    | whether to print signature                                                                        |
 | -starttls     | upgrade a plaintext connection to tls: smtp, imap, pop3, ftp, nntp, ldap, postgres                |
 | -sort-expiry  | sort certificates by expiration date                                                              |
-| -subject-like | print certificates with issuer field containing supplied string                                   |
+| -subject-like | print certificates with subject field containing supplied string                                  |
 | -verify       | verify against the system trust store and report why it fails                                     |
 | -timeout      | how long to wait for a connection, and proportionally longer for revocation requests (default 5s)  |
 | -more         | use a combination of the '-pem -signature -chains' flags                                          |
