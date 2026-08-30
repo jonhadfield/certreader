@@ -165,39 +165,11 @@ func (l Location) SortByExpiry() Location {
 	return l
 }
 
+// Chains returns the trusted chains that can be built for this location. It is
+// the display half of verification: the same chain building Verify judges,
+// without the hostname check or the diagnosis.
 func (l Location) Chains() ([]Certificates, error) {
-	pool, err := x509.SystemCertPool()
-	if err != nil {
-		return nil, err
-	}
-
-	// we are not verifying time and dns, because we want to work with -insecure flag as well
-	// just to see what local chains are used for verification
-	opts := x509.VerifyOptions{
-		Roots:         pool,
-		Intermediates: x509.NewCertPool(),
-	}
-	for _, cert := range l.Certificates {
-		// do not just use index (index 0 leaf/end-entity, rest intermediate) like connection,
-		// because we can deal with certs from a bundle file
-		if cert.Type() == "intermediate" {
-			opts.Intermediates.AddCert(cert.x509Certificate)
-		}
-	}
-
-	var verifiedChains []Certificates
-	for _, cert := range l.Certificates {
-		if cert.Type() == "end-entity" {
-			chains, err := cert.x509Certificate.Verify(opts)
-			if err != nil {
-				return nil, err
-			}
-			for _, chain := range chains {
-				verifiedChains = append(verifiedChains, FromX509Certificates(chain))
-			}
-		}
-	}
-	return verifiedChains, nil
+	return l.buildChains()
 }
 
 // HasOCSPStaple reports whether the server stapled an OCSP response to the

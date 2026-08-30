@@ -254,3 +254,79 @@ func Test_issuerWasPresented(t *testing.T) {
 	pool.AddCert(issuer)
 	assert.True(t, issuerWasPresented(leaf, pool))
 }
+
+func TestChainsAndVerifyShareOneImplementation(t *testing.T) {
+
+	t.Run("given a chain that builds then both agree it does", func(t *testing.T) {
+		leaf, issuer := verifyChain(t, &x509.Certificate{
+			Subject:  pkix.Name{CommonName: "shared.example.com"},
+			DNSNames: []string{"shared.example.com"},
+		})
+		location := networkLocation("shared.example.com:443", leaf, issuer)
+
+		chains, err := location.Chains()
+		result := location.Verify()
+
+		// the test CA is not trusted, so neither should manage a chain
+		require.Error(t, err)
+		assert.Empty(t, chains)
+		assert.Equal(t, 0, result.Chains)
+		assert.False(t, result.OK)
+	})
+
+	t.Run("given a name mismatch then chains still build", func(t *testing.T) {
+		// -chains exists to show what chains can be made; the name is a
+		// separate question, and answering it here would hide the chain
+		leaf, issuer := verifyChain(t, &x509.Certificate{
+			Subject:  pkix.Name{CommonName: "right.example.com"},
+			DNSNames: []string{"right.example.com"},
+		})
+		location := networkLocation("wrong.example.com:443", leaf, issuer)
+
+		result := location.Verify()
+
+		// the CA is untrusted here too, so the useful assertion is that the
+		// hostname is not what stopped the chain being attempted
+		assert.Equal(t, "wrong.example.com", result.Hostname)
+		assert.NotContains(t, problemCodes(result), VerifyHostnameMismatch,
+			"an untrusted chain is the first problem, not the name")
+	})
+
+	t.Run("given a self signed certificate then chains reports why rather than staying silent", func(t *testing.T) {
+		// it used to be classified a root and so never verified, which showed
+		// as zero chains with no reason given
+		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+		template := &x509.Certificate{
+			SerialNumber: big.NewInt(4),
+			Subject:      pkix.Name{CommonName: "solo.example.com"},
+			DNSNames:     []string{"solo.example.com"},
+			NotBefore:    time.Now().Add(-time.Hour),
+			NotAfter:     time.Now().Add(24 * time.Hour),
+		}
+		der, err := x509.CreateCertificate(rand.Reader, template, template, key.Public(), key)
+		require.NoError(t, err)
+		selfSigned, err := x509.ParseCertificate(der)
+		require.NoError(t, err)
+
+		_, err = networkLocation("solo.example.com:443", selfSigned).Chains()
+		assert.Error(t, err, "zero chains without a reason was the thing worth fixing")
+	})
+
+	t.Run("given a bundle with several end-entities then each is chained", func(t *testing.T) {
+		// the previous implementation walked every end-entity, so this holds
+		first, firstIssuer := verifyChain(t, &x509.Certificate{Subject: pkix.Name{CommonName: "a.example.com"}})
+		second, secondIssuer := verifyChain(t, &x509.Certificate{Subject: pkix.Name{CommonName: "b.example.com"}})
+
+		location := Location{
+			Path:         "bundle.pem",
+			ContentType:  ContentTypeCertificate,
+			Certificates: FromX509Certificates([]*x509.Certificate{first, firstIssuer, second, secondIssuer}),
+		}
+
+		// both are untrusted, so the first failure is returned rather than a
+		// partial answer
+		_, err := location.Chains()
+		assert.Error(t, err)
+	})
+}
