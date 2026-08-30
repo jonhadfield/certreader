@@ -69,8 +69,8 @@ func TestSplitString(t *testing.T) {
 	})
 }
 
-func TestLocationUnified(t *testing.T) {
-	t.Run("given valid locations, when LocationsUnified called, then output generated", func(t *testing.T) {
+func TestLocations(t *testing.T) {
+	t.Run("given valid locations, when Locations called, then output generated", func(t *testing.T) {
 		oldStdout := os.Stdout
 		r, w, _ := os.Pipe()
 		os.Stdout = w
@@ -83,7 +83,7 @@ func TestLocationUnified(t *testing.T) {
 			},
 		}
 
-		LocationsUnified(locations, false, false, false, false)
+		Locations(locations, false, false, false, false)
 
 		w.Close()
 		os.Stdout = oldStdout
@@ -92,7 +92,7 @@ func TestLocationUnified(t *testing.T) {
 		assert.Contains(t, string(output), "test.pem")
 	})
 
-	t.Run("given location with error, when LocationsUnified called, then error shown", func(t *testing.T) {
+	t.Run("given location with error, when Locations called, then error shown", func(t *testing.T) {
 		oldStdout := os.Stdout
 		r, w, _ := os.Pipe()
 		os.Stdout = w
@@ -104,7 +104,7 @@ func TestLocationUnified(t *testing.T) {
 			},
 		}
 
-		LocationsUnified(locations, false, false, false, false)
+		Locations(locations, false, false, false, false)
 
 		w.Close()
 		os.Stdout = oldStdout
@@ -114,8 +114,8 @@ func TestLocationUnified(t *testing.T) {
 	})
 }
 
-func TestPemUnified(t *testing.T) {
-	t.Run("given valid locations, when PemUnified called, then PEM output generated", func(t *testing.T) {
+func TestPemBlocks(t *testing.T) {
+	t.Run("given valid locations, when Pem called, then PEM output generated", func(t *testing.T) {
 		oldStdout := os.Stdout
 		r, w, _ := os.Pipe()
 		os.Stdout = w
@@ -128,7 +128,7 @@ func TestPemUnified(t *testing.T) {
 			},
 		}
 
-		PemUnified(locations, false)
+		Pem(locations, false)
 
 		w.Close()
 		os.Stdout = oldStdout
@@ -137,7 +137,7 @@ func TestPemUnified(t *testing.T) {
 		assert.Contains(t, string(output), "BEGIN CERTIFICATE")
 	})
 
-	t.Run("given location with error, when PemUnified called, then error shown", func(t *testing.T) {
+	t.Run("given location with error, when Pem called, then error shown", func(t *testing.T) {
 		oldStdout := os.Stdout
 		r, w, _ := os.Pipe()
 		os.Stdout = w
@@ -149,7 +149,7 @@ func TestPemUnified(t *testing.T) {
 			},
 		}
 
-		PemUnified(locations, false)
+		Pem(locations, false)
 
 		w.Close()
 		os.Stdout = oldStdout
@@ -159,13 +159,13 @@ func TestPemUnified(t *testing.T) {
 	})
 }
 
-func TestExpiryUnifiedNamesEachCertificate(t *testing.T) {
+func TestExpiryNamesEachCertificate(t *testing.T) {
 	// every line shares the location prefix, so without a name the
 	// certificates in a chain cannot be told apart
 	certs := createTestCertificates(t, 2)
 	locations := cert.Locations{{Path: "test.pem", Certificates: certs}}
 
-	output := captureStdout(t, func() { ExpiryUnified(locations) })
+	output := captureStdout(t, func() { Expiry(locations) })
 
 	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
 		assert.Contains(t, line, "test.pem:")
@@ -182,8 +182,8 @@ func Test_expirySubject(t *testing.T) {
 	assert.NotContains(t, expirySubject(certs[0]), "CN=", "the full distinguished name would be too long")
 }
 
-func TestExpiryUnified(t *testing.T) {
-	t.Run("given valid locations, when ExpiryUnified called, then expiry output generated", func(t *testing.T) {
+func TestExpiry(t *testing.T) {
+	t.Run("given valid locations, when Expiry called, then expiry output generated", func(t *testing.T) {
 		oldStdout := os.Stdout
 		r, w, _ := os.Pipe()
 		os.Stdout = w
@@ -196,7 +196,7 @@ func TestExpiryUnified(t *testing.T) {
 			},
 		}
 
-		ExpiryUnified(locations)
+		Expiry(locations)
 
 		w.Close()
 		os.Stdout = oldStdout
@@ -205,7 +205,7 @@ func TestExpiryUnified(t *testing.T) {
 		assert.NotEmpty(t, output)
 	})
 
-	t.Run("given location with error, when ExpiryUnified called, then handled gracefully", func(t *testing.T) {
+	t.Run("given location with error, when Expiry called, then handled gracefully", func(t *testing.T) {
 		oldStdout := os.Stdout
 		r, w, _ := os.Pipe()
 		os.Stdout = w
@@ -217,7 +217,7 @@ func TestExpiryUnified(t *testing.T) {
 			},
 		}
 
-		ExpiryUnified(locations)
+		Expiry(locations)
 
 		w.Close()
 		os.Stdout = oldStdout

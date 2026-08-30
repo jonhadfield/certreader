@@ -143,7 +143,7 @@ func Test_revocationSource(t *testing.T) {
 	assert.Equal(t, "stapled OCSP", revocationSource(withoutURL))
 }
 
-func TestLocationsUnifiedPrintsRevocation(t *testing.T) {
+func TestLocationsPrintsRevocation(t *testing.T) {
 	chain := newStapleTestChain(t)
 	location := chain.location(nil, true)
 	location.Revocation = &cert.RevocationStatus{
@@ -156,7 +156,7 @@ func TestLocationsUnifiedPrintsRevocation(t *testing.T) {
 	}
 
 	output := captureStdout(t, func() {
-		LocationsUnified(cert.Locations{location}, false, false, false, false)
+		Locations(cert.Locations{location}, false, false, false, false)
 	})
 
 	assert.Contains(t, output, "certreader.test:443")

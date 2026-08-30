@@ -74,11 +74,11 @@ func main() {
 			os.Exit(exitLoadError)
 		}
 	case flags.Expiry:
-		print.ExpiryUnified(locations)
+		print.Expiry(locations)
 	case flags.PemOnly:
-		print.PemUnified(locations, flags.Chains)
+		print.Pem(locations, flags.Chains)
 	default:
-		print.LocationsUnified(locations, flags.Chains, flags.Pem, flags.Extensions, flags.Signature)
+		print.Locations(locations, flags.Chains, flags.Pem, flags.Extensions, flags.Signature)
 	}
 
 	os.Exit(exitStatus(locations, flags))
