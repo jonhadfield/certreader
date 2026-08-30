@@ -115,7 +115,7 @@ func LoadLocations(flags Flags) cert.Locations {
 		locations = append(locations, loadFromArgs(flags.Args, flags)...)
 	}
 
-	if isStdin() {
+	if shouldReadStdin(flags, isStdin()) {
 		locations = append(locations, cert.LoadFromStdin(flags.PfxPassword))
 	}
 
@@ -358,6 +358,20 @@ func isDNSLabel(label string) bool {
 	return true
 }
 
+// shouldReadStdin reports whether stdin is worth reading. It is read only when
+// nothing else was named: a pipe on stdin says nothing about whether the caller
+// meant to send anything down it, and a parent process holding an idle pipe
+// open would otherwise block the read for ever with a file or host already
+// given to read. Reading both also invented a second location out of whatever
+// happened to be on the pipe, which failed the run.
+func shouldReadStdin(flags Flags, piped bool) bool {
+	if !piped {
+		return false
+	}
+	return !flags.Clipboard && len(flags.Args) == 0
+}
+
+// isStdin reports whether stdin is a pipe or a redirect rather than a terminal.
 func isStdin() bool {
 
 	info, err := os.Stdin.Stat()
