@@ -35,9 +35,15 @@ type Location struct {
 	// OCSPStaple is the raw OCSP response the TLS server stapled to the
 	// handshake, if any. Only applicable for network certificates.
 	OCSPStaple []byte
+	// ServerName is the name verification should use, when it was overridden
+	// rather than taken from the address.
+	ServerName string
 	// Revocation is the outcome of a revocation check, populated only when one
 	// was requested.
 	Revocation *RevocationStatus
+	// Verification is the outcome of checking against the system trust store,
+	// populated only when one was requested.
+	Verification *VerificationResult
 }
 
 func (l Location) Name() string {
@@ -292,6 +298,7 @@ func LoadFromNetwork(addr string, opts NetworkOptions) Location {
 		ContentType:  ContentTypeCertificate,
 		Certificates: FromX509Certificates(x509Certificates),
 		OCSPStaple:   connectionState.OCSPResponse,
+		ServerName:   opts.ServerName,
 	}
 }
 

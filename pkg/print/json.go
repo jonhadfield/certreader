@@ -26,6 +26,7 @@ type jsonLocation struct {
 	Error        string              `json:"error,omitempty"`
 	Certificates []jsonCertificate   `json:"certificates,omitempty"`
 	CSRs         []jsonCSR           `json:"csrs,omitempty"`
+	Verification *jsonVerification   `json:"verification,omitempty"`
 	OCSPStaple   *jsonOCSP           `json:"ocsp_staple,omitempty"`
 	Revocation   *jsonRevocation     `json:"revocation,omitempty"`
 	Chains       [][]jsonCertificate `json:"chains,omitempty"`
@@ -88,6 +89,21 @@ type jsonExtension struct {
 	OID      string   `json:"oid"`
 	Critical bool     `json:"critical"`
 	Values   []string `json:"values,omitempty"`
+}
+
+type jsonVerification struct {
+	OK bool `json:"ok"`
+	// Hostname is the name checked, absent when the source gave none.
+	Hostname string              `json:"hostname,omitempty"`
+	Chains   int                 `json:"chains"`
+	Problems []jsonVerifyProblem `json:"problems,omitempty"`
+}
+
+type jsonVerifyProblem struct {
+	// Code is stable, so a check can match on it rather than on the message.
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Subject string `json:"subject,omitempty"`
 }
 
 type jsonOCSP struct {
@@ -170,6 +186,10 @@ func buildLocation(location cert.Location, printChains, printPem, printExtension
 	}
 	for _, certificate := range location.Certificates {
 		out.Certificates = append(out.Certificates, buildCertificate(certificate, printPem, printExtensions, printSignature))
+	}
+
+	if location.Verification != nil {
+		out.Verification = buildVerification(location.Verification)
 	}
 
 	if location.Revocation != nil {
@@ -280,6 +300,17 @@ func buildExtensions(extensions []cert.Extension) []jsonExtension {
 			OID:      extension.Oid,
 			Critical: extension.Critical,
 			Values:   extension.Values,
+		})
+	}
+	return out
+}
+
+func buildVerification(in *cert.VerificationResult) *jsonVerification {
+
+	out := &jsonVerification{OK: in.OK, Hostname: in.Hostname, Chains: in.Chains}
+	for _, problem := range in.Problems {
+		out.Problems = append(out.Problems, jsonVerifyProblem{
+			Code: problem.Code, Message: problem.Message, Subject: problem.Subject,
 		})
 	}
 	return out

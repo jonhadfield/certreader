@@ -34,6 +34,7 @@ type Flags struct {
 	Timeout     time.Duration
 	Insecure    bool
 	Revocation  bool
+	Verify      bool
 	Chains      bool
 	Extensions  bool
 	Signature   bool
@@ -79,6 +80,8 @@ func ParseFlags() (Flags, error) {
 		"whether a client verifies the server's certificate chain and host name (only applicable for host)")
 	flagSet.BoolVar(&flags.Revocation, "revocation", getBoolEnv("CERTREADER_REVOCATION", false),
 		"check revocation status via OCSP, falling back to CRL (makes network requests)")
+	flagSet.BoolVar(&flags.Verify, "verify", getBoolEnv("CERTREADER_VERIFY", false),
+		"verify against the system trust store and report why it fails")
 	flagSet.BoolVar(&flags.Chains, "chains", getBoolEnv("CERTREADER_CHAINS", false),
 		"whether to print verified chains as well (only applicable for host)")
 	flagSet.BoolVar(&flags.Extensions, "extensions", getBoolEnv("CERTREADER_EXTENSIONS", false),

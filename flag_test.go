@@ -284,3 +284,30 @@ func TestParseFlagsTimeout(t *testing.T) {
 		assert.Equal(t, 30*time.Second, defaultTimeout*revocationBudgetMultiple)
 	})
 }
+
+func TestParseFlagsVerify(t *testing.T) {
+
+	t.Run("given no flag then verification is off", func(t *testing.T) {
+		setInput(t, []string{"flag"}, nil)
+
+		flags, err := ParseFlags()
+		require.NoError(t, err)
+		assert.False(t, flags.Verify)
+	})
+
+	t.Run("given the flag then it is set", func(t *testing.T) {
+		setInput(t, []string{"flag", "-verify=true"}, nil)
+
+		flags, err := ParseFlags()
+		require.NoError(t, err)
+		assert.True(t, flags.Verify)
+	})
+
+	t.Run("given the env var then it is set", func(t *testing.T) {
+		setInput(t, []string{"flag"}, map[string]string{"CERTREADER_VERIFY": "true"})
+
+		flags, err := ParseFlags()
+		require.NoError(t, err)
+		assert.True(t, flags.Verify)
+	})
+}
