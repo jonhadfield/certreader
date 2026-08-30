@@ -129,8 +129,11 @@ The distinction between `missing-intermediate` and `untrusted-root` is the usefu
 A hostname is only checked for certificates read from the network, since one read from a file is not
 being served for any particular name. `-server-name` overrides the name checked.
 
-Verification is independent of `-chains`, which shows the chains that were built rather than
-explaining a failure, and does not check the hostname at all.
+`-chains` is the display half of the same thing: it prints the chains that were built, where
+`-verify` judges them. Both use one implementation, so they cannot disagree about what a valid chain
+is. Chain building deliberately ignores the hostname, so `-chains` still shows what can be built for
+a certificate served under the wrong name; `-verify` checks the name separately and reports a
+mismatch as itself.
 
 ## warnings
 

@@ -62,7 +62,7 @@ func (l Location) Verify() VerificationResult {
 		return result
 	}
 
-	roots, err := x509.SystemCertPool()
+	opts, err := l.verifyOptions()
 	if err != nil {
 		result.Problems = append(result.Problems, VerificationProblem{
 			Code:    VerifySystemRoots,
@@ -71,27 +71,21 @@ func (l Location) Verify() VerificationResult {
 		return result
 	}
 
-	intermediates := x509.NewCertPool()
-	for i := range l.Certificates {
-		candidate := l.Certificates[i].x509Certificate
-		if candidate == nil || candidate.Equal(leaf) {
-			continue
-		}
-		intermediates.AddCert(candidate)
-	}
-
+	// The chain is built without the hostname, because -chains exists to show
+	// what chains can be made even when the name does not match. The name is
+	// then checked on its own, so a mismatch is reported as itself rather than
+	// as a chain that could not be built.
+	chains, chainErr := leaf.Verify(opts)
+	result.Chains = len(chains)
 	result.Hostname = l.verificationHostname()
-	opts := x509.VerifyOptions{
-		Roots:         roots,
-		Intermediates: intermediates,
-		DNSName:       result.Hostname,
-		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+
+	var hostErr error
+	if chainErr == nil && result.Hostname != "" {
+		hostErr = leaf.VerifyHostname(result.Hostname)
 	}
 
-	chains, err := leaf.Verify(opts)
-	if err == nil {
+	if chainErr == nil && hostErr == nil {
 		result.OK = true
-		result.Chains = len(chains)
 		return result
 	}
 
@@ -102,32 +96,89 @@ func (l Location) Verify() VerificationResult {
 		return result
 	}
 
-	result.Problems = diagnose(leaf, opts, err)
-	return result
-}
-
-// diagnose works out which part of verification failed, by retrying without the
-// hostname to separate a name mismatch from a chain that cannot be built.
-func diagnose(leaf *x509.Certificate, opts x509.VerifyOptions, err error) []VerificationProblem {
-
-	withoutHostname := opts
-	withoutHostname.DNSName = ""
-
-	if _, chainErr := leaf.Verify(withoutHostname); chainErr == nil {
-		// the chain is sound, so the name is the only thing wrong
+	if chainErr == nil {
 		var hostnameErr x509.HostnameError
-		message := err.Error()
-		if errors.As(err, &hostnameErr) {
+		message := hostErr.Error()
+		if errors.As(hostErr, &hostnameErr) {
 			message = fmt.Sprintf("not valid for %s", hostnameErr.Host)
 		}
-		return []VerificationProblem{{
+		result.Problems = []VerificationProblem{{
 			Code:    VerifyHostnameMismatch,
 			Message: message,
 			Subject: leaf.Subject.String(),
 		}}
-	} else {
-		err = chainErr
+		return result
 	}
+
+	result.Problems = diagnose(leaf, opts, chainErr)
+	return result
+}
+
+// verifyOptions is the chain building configuration shared by Verify and
+// Chains, so that the two cannot disagree about what a valid chain is.
+func (l Location) verifyOptions() (x509.VerifyOptions, error) {
+
+	roots, err := x509.SystemCertPool()
+	if err != nil {
+		return x509.VerifyOptions{}, err
+	}
+
+	intermediates := x509.NewCertPool()
+	for i := range l.Certificates {
+		candidate := l.Certificates[i].x509Certificate
+		if candidate == nil || l.Certificates[i].Type() == "end-entity" {
+			continue
+		}
+		intermediates.AddCert(candidate)
+	}
+
+	return x509.VerifyOptions{
+		Roots:         roots,
+		Intermediates: intermediates,
+		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+	}, nil
+}
+
+// buildChains returns every trusted chain for the end-entity certificates
+// present. It is what -chains shows, built by the same code that -verify
+// judges, so the two cannot drift apart.
+func (l Location) buildChains() ([]Certificates, error) {
+
+	opts, err := l.verifyOptions()
+	if err != nil {
+		return nil, err
+	}
+
+	var leaves []*x509.Certificate
+	for i := range l.Certificates {
+		if l.Certificates[i].Error() == nil && l.Certificates[i].Type() == "end-entity" {
+			leaves = append(leaves, l.Certificates[i].x509Certificate)
+		}
+	}
+	// a self signed certificate looks like a root, so it would otherwise never
+	// be treated as something to build a chain from
+	if len(leaves) == 0 {
+		if leaf := l.verificationLeaf(); leaf != nil {
+			leaves = append(leaves, leaf)
+		}
+	}
+
+	var out []Certificates
+	for _, leaf := range leaves {
+		chains, err := leaf.Verify(opts)
+		if err != nil {
+			return nil, err
+		}
+		for _, chain := range chains {
+			out = append(out, FromX509Certificates(chain))
+		}
+	}
+	return out, nil
+}
+
+// diagnose works out why the chain could not be built. The hostname has already
+// been ruled out by the caller, which checks it separately.
+func diagnose(leaf *x509.Certificate, opts x509.VerifyOptions, err error) []VerificationProblem {
 
 	// A specific complaint from the verifier is worth repeating as it stands.
 	// Expiry is excluded because it is reported separately, in full.
