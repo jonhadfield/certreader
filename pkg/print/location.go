@@ -8,40 +8,6 @@ import (
 	"time"
 )
 
-func Locations(certificateLocations []cert.CertificateLocation, printChains, printPem, printExtensions, printSignature bool) {
-
-	for _, certificateLocation := range certificateLocations {
-		if certificateLocation.Error != nil {
-			slog.Error(fmt.Sprintf("%s: %v", certificateLocation.Name(), certificateLocation.Error))
-			fmt.Printf("--- [%s: %v] ---\n", certificateLocation.Name(), certificateLocation.Error)
-			fmt.Println()
-			continue
-		}
-
-		fmt.Printf("--- [%s] ---\n", certificateLocation.Name())
-		printCertificates(certificateLocation.Certificates, printPem, printExtensions, printSignature)
-
-		if printChains {
-			chains, err := certificateLocation.Chains()
-			if err != nil {
-				slog.Error(fmt.Sprintf("chains for %s: %v", certificateLocation.Name(), certificateLocation.Error))
-				fmt.Printf("--- [chains for %s: %v] ---\n", certificateLocation.Name(), err)
-				continue
-			}
-
-			if len(chains) == 1 {
-				fmt.Printf("--- [%d chain for %s] ---\n", len(chains), certificateLocation.Name())
-			} else {
-				fmt.Printf("--- [%d chains for %s] ---\n", len(chains), certificateLocation.Name())
-			}
-			for i, chain := range chains {
-				fmt.Printf(" -- [chain %d] -- \n", i+1)
-				printCertificates(chain, printPem, printExtensions, printSignature)
-			}
-		}
-	}
-}
-
 func printCertificates(certs cert.Certificates, printPem, printExtensions, printSignature bool) {
 
 	for _, certificate := range certs {

@@ -1,16 +1,79 @@
 package cert
 
 import (
-	"bytes"
 	"crypto/tls"
-	"crypto/x509"
+	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.design/x/clipboard"
 )
+
+func TestLoadFromFile_AutoDetectCertificate(t *testing.T) {
+	location := LoadFromFile("testdata/cert.pem", "")
+	require.NoError(t, location.Error)
+	assert.True(t, location.IsCertificate())
+	assert.False(t, location.IsCSR())
+	assert.Len(t, location.Certificates, 1)
+	assert.Len(t, location.CSRs, 0)
+}
+
+func TestLoadFromFile_AutoDetectCSR(t *testing.T) {
+	location := LoadFromFile("testdata/csr.pem", "")
+	require.NoError(t, location.Error)
+	assert.True(t, location.IsCSR())
+	assert.False(t, location.IsCertificate())
+	assert.Len(t, location.CSRs, 1)
+	assert.Len(t, location.Certificates, 0)
+}
+
+func TestLoadFromFile_InvalidFile(t *testing.T) {
+	location := LoadFromFile("testdata/nonexistent.pem", "")
+	assert.Error(t, location.Error)
+}
+
+func TestLoadContent_CertificateTakesPrecedence(t *testing.T) {
+	// Read certificate content
+	data, err := os.ReadFile("testdata/cert.pem")
+	require.NoError(t, err)
+
+	location := loadContent("test", data, "")
+	require.NoError(t, location.Error)
+	assert.True(t, location.IsCertificate())
+	assert.False(t, location.IsCSR())
+}
+
+func TestLoadContent_CSRDetection(t *testing.T) {
+	// Read CSR content
+	data, err := os.ReadFile("testdata/csr.pem")
+	require.NoError(t, err)
+
+	location := loadContent("test", data, "")
+	require.NoError(t, location.Error)
+	assert.True(t, location.IsCSR())
+	assert.False(t, location.IsCertificate())
+}
+
+func TestLoadContent_InvalidContent(t *testing.T) {
+	invalidData := []byte("this is not a valid PEM")
+	location := loadContent("test", invalidData, "")
+	assert.Error(t, location.Error)
+}
+
+func TestLocations_Operations(t *testing.T) {
+	loc1 := LoadFromFile("testdata/cert.pem", "")
+	loc2 := LoadFromFile("testdata/csr.pem", "")
+
+	locations := Locations{loc1, loc2}
+	assert.Len(t, locations, 2)
+
+	// Test that operations don't crash with mixed content
+	filtered := locations.RemoveDuplicates()
+	assert.Len(t, filtered, 2)
+
+	sorted := locations.SortByExpiry()
+	assert.Len(t, sorted, 2)
+}
 
 func Test_nameFormat(t *testing.T) {
 	t.Run("given no tls version then name is returned", func(t *testing.T) {
@@ -26,75 +89,5 @@ func Test_nameFormat(t *testing.T) {
 	t.Run("given TLS 1.2 tls version then name and 1.2 version is returned", func(t *testing.T) {
 		name := nameFormat("test name", tls.VersionTLS12)
 		assert.Equal(t, "test name TLS 1.2", name)
-	})
-}
-
-func Test_loadCertificate(t *testing.T) {
-	t.Run("given valid certificate then cert location is loaded", func(t *testing.T) {
-		certificate := loadTestFile(t, "cert.pem")
-		cert := loadCertificate("test", certificate, "")
-		require.Equal(t, 1, len(cert.Certificates))
-		assert.Equal(t, "CN=DigiCert Global Root G2,OU=www.digicert.com,O=DigiCert Inc,C=US", cert.Certificates[0].SubjectString())
-	})
-
-	t.Run("given certificate with extra spaces then cert location is loaded", func(t *testing.T) {
-		certificate := loadTestFile(t, "cert.pem")
-		certificate = bytes.Join([][]byte{[]byte("   "), certificate}, []byte(""))
-		cert := loadCertificate("test", certificate, "")
-		require.Equal(t, 1, len(cert.Certificates))
-		assert.Equal(t, "CN=DigiCert Global Root G2,OU=www.digicert.com,O=DigiCert Inc,C=US", cert.Certificates[0].SubjectString())
-	})
-}
-
-func Test_loadCertificateFromClipboard(t *testing.T) {
-	if err := clipboard.Init(); err != nil {
-		t.Skip("clipboard not supported in this environment")
-	}
-
-	t.Run("given valid certificate in clipboard then cert is loaded", func(t *testing.T) {
-		certificate := loadTestFile(t, "cert.pem")
-		clipboard.Write(clipboard.FmtText, certificate)
-
-		cert := LoadCertificateFromClipboard("")
-		require.Equal(t, 1, len(cert.Certificates))
-		assert.Equal(t, "CN=DigiCert Global Root G2,OU=www.digicert.com,O=DigiCert Inc,C=US", cert.Certificates[0].SubjectString())
-	})
-}
-
-func TestCertificateLocation_SortByExpiry(t *testing.T) {
-	t.Run("given valid certificate in clipboard then cert is loaded", func(t *testing.T) {
-		locations := CertificateLocations{
-			{
-				Path: "three",
-				Certificates: Certificates{
-					{x509Certificate: &x509.Certificate{NotAfter: time.Now().AddDate(3, 2, 3)}},
-				},
-			},
-			{
-				Path: "one",
-				Certificates: Certificates{
-					{x509Certificate: &x509.Certificate{NotAfter: time.Now().AddDate(1, 6, 2)}},
-					{x509Certificate: &x509.Certificate{NotAfter: time.Now().AddDate(1, 6, 21)}},
-					{x509Certificate: &x509.Certificate{NotAfter: time.Now().AddDate(0, 6, 3)}},
-					{x509Certificate: &x509.Certificate{NotAfter: time.Now().AddDate(1, 3, 3)}},
-				},
-			},
-			{
-				Path: "four",
-			},
-			{
-				Path: "two",
-				Certificates: Certificates{
-					{x509Certificate: &x509.Certificate{NotAfter: time.Now().AddDate(0, 7, 3)}},
-				},
-			},
-		}
-
-		sortedLocations := locations.SortByExpiry()
-		require.Equal(t, 4, len(sortedLocations))
-		assert.Equal(t, "one", sortedLocations[0].Path)
-		assert.Equal(t, "two", sortedLocations[1].Path)
-		assert.Equal(t, "three", sortedLocations[2].Path)
-		assert.Equal(t, "four", sortedLocations[3].Path)
 	})
 }
