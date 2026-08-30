@@ -279,11 +279,15 @@ func promptLabel(path string) string {
 	}
 }
 
-func canPromptForPassword() bool {
+// canPromptForPassword and promptForPasswordInput are variables rather than
+// plain functions so that the retry loop above can be tested. It is the most
+// intricate logic here and it handles credentials, which is a poor combination
+// to leave unexercised for want of a terminal.
+var canPromptForPassword = func() bool {
 	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stderr.Fd()))
 }
 
-func promptForPasswordInput(path string, attempt int) (string, bool) {
+var promptForPasswordInput = func(path string, attempt int) (string, bool) {
 	prompt := fmt.Sprintf("Enter password for %s", promptLabel(path))
 	if attempt > 0 {
 		prompt += " (try again)"

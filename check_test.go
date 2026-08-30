@@ -314,3 +314,18 @@ func certificateWithWarnings(t *testing.T) cert.Location {
 		Certificates: cert.FromX509Certificates([]*x509.Certificate{leaf}),
 	}
 }
+
+func Test_revocationIsRendered(t *testing.T) {
+	// it decides whether the network work happens, so getting it wrong either
+	// wastes requests or silently drops a result the user asked for
+
+	assert.True(t, revocationIsRendered(Flags{}), "the default output shows it")
+	assert.True(t, revocationIsRendered(Flags{JSON: true}))
+
+	assert.False(t, revocationIsRendered(Flags{Expiry: true}), "expiry output has nowhere to put it")
+	assert.False(t, revocationIsRendered(Flags{PemOnly: true}))
+
+	// json wins over the narrower modes, so the work is still worth doing
+	assert.True(t, revocationIsRendered(Flags{JSON: true, Expiry: true}))
+	assert.True(t, revocationIsRendered(Flags{JSON: true, PemOnly: true}))
+}
