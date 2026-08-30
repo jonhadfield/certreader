@@ -311,3 +311,30 @@ func TestParseFlagsVerify(t *testing.T) {
 		assert.True(t, flags.Verify)
 	})
 }
+
+func TestParseFlagsFailOnWarning(t *testing.T) {
+
+	t.Run("given no flag then warnings do not affect the exit code", func(t *testing.T) {
+		setInput(t, []string{"flag"}, nil)
+
+		flags, err := ParseFlags()
+		require.NoError(t, err)
+		assert.False(t, flags.FailOnWarning)
+	})
+
+	t.Run("given the flag then it is set", func(t *testing.T) {
+		setInput(t, []string{"flag", "-fail-on-warning=true"}, nil)
+
+		flags, err := ParseFlags()
+		require.NoError(t, err)
+		assert.True(t, flags.FailOnWarning)
+	})
+
+	t.Run("given the env var then it is set", func(t *testing.T) {
+		setInput(t, []string{"flag"}, map[string]string{"CERTREADER_FAIL_ON_WARNING": "true"})
+
+		flags, err := ParseFlags()
+		require.NoError(t, err)
+		assert.True(t, flags.FailOnWarning)
+	})
+}

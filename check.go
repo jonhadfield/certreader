@@ -42,6 +42,9 @@ func exitStatus(locations cert.Locations, flags Flags) int {
 		if flags.ExpiringWithin != "" && expiresWithin(location, flags.ExpiringWindow) {
 			return exitCheckFailed
 		}
+		if flags.FailOnWarning && hasWarnings(location) {
+			return exitCheckFailed
+		}
 	}
 
 	if loadFailed {
@@ -59,6 +62,22 @@ func expiresWithin(location cert.Location, window time.Duration) bool {
 			continue
 		}
 		if time.Until(certificate.NotAfter()) <= window {
+			return true
+		}
+	}
+	return false
+}
+
+// hasWarnings reports whether anything was flagged about the certificates or
+// the way the chain was served. Chain warnings are only present when
+// verification ran, so without -verify this considers the certificates alone.
+func hasWarnings(location cert.Location) bool {
+
+	if location.Verification != nil && len(location.Verification.ChainWarnings) != 0 {
+		return true
+	}
+	for _, certificate := range location.Certificates {
+		if len(certificate.Warnings()) != 0 {
 			return true
 		}
 	}

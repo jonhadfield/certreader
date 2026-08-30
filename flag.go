@@ -30,23 +30,26 @@ type Flags struct {
 	// StartTLS names a protocol to upgrade from plaintext, empty for direct TLS.
 	StartTLS cert.StartTLSProtocol
 	// TimeoutRaw is the raw flag value, Timeout its parsed form.
-	TimeoutRaw  string
-	Timeout     time.Duration
-	Insecure    bool
-	Revocation  bool
-	Verify      bool
-	Chains      bool
-	Extensions  bool
-	Signature   bool
-	Pem         bool
-	PemOnly     bool
-	JSON        bool
-	Verbose     bool
-	Version     bool
-	More        bool
-	Clipboard   bool
-	PfxPassword string
-	Args        []string
+	TimeoutRaw string
+	Timeout    time.Duration
+	Insecure   bool
+	Revocation bool
+	Verify     bool
+	// FailOnWarning widens what counts as a failed check to include warnings,
+	// which are otherwise reported without affecting the exit code.
+	FailOnWarning bool
+	Chains        bool
+	Extensions    bool
+	Signature     bool
+	Pem           bool
+	PemOnly       bool
+	JSON          bool
+	Verbose       bool
+	Version       bool
+	More          bool
+	Clipboard     bool
+	PfxPassword   string
+	Args          []string
 }
 
 func ParseFlags() (Flags, error) {
@@ -80,6 +83,8 @@ func ParseFlags() (Flags, error) {
 		"whether a client verifies the server's certificate chain and host name (only applicable for host)")
 	flagSet.BoolVar(&flags.Revocation, "revocation", getBoolEnv("CERTREADER_REVOCATION", false),
 		"check revocation status via OCSP, falling back to CRL (makes network requests)")
+	flagSet.BoolVar(&flags.FailOnWarning, "fail-on-warning", getBoolEnv("CERTREADER_FAIL_ON_WARNING", false),
+		"exit non-zero if any certificate or chain warning is reported")
 	flagSet.BoolVar(&flags.Verify, "verify", getBoolEnv("CERTREADER_VERIFY", false),
 		"verify against the system trust store and report why it fails")
 	flagSet.BoolVar(&flags.Chains, "chains", getBoolEnv("CERTREADER_CHAINS", false),
