@@ -453,6 +453,16 @@ CA: true
 --- 1 verified chains ---
 ```
 
+### expiry
+
+Each line names the certificate it refers to, since every line in a chain shares the same prefix:
+
+```
+www.digicert.com TLS 1.3: Sep 25 23:59:59 2026 UTC  www.digicert.com
+www.digicert.com TLS 1.3: Jul  2 12:42:50 2030 UTC  DigiCert EV RSA CA G2
+www.digicert.com TLS 1.3: Jan 15 12:00:00 2038 UTC  DigiCert Global Root G2
+```
+
 ### info/expiry
 
 `certreader -expiry google.com:443`

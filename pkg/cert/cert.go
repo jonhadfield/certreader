@@ -326,6 +326,13 @@ func (c Certificate) ToPEM() []byte {
 	})
 }
 
+// CommonName is the subject's common name, empty when it has none. It is
+// enough to tell certificates apart without printing a whole distinguished
+// name, which for an EV certificate runs to several hundred characters.
+func (c Certificate) CommonName() string {
+	return c.x509Certificate.Subject.CommonName
+}
+
 func (c Certificate) SubjectString() string {
 
 	if c.err != nil {

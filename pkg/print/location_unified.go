@@ -116,7 +116,9 @@ func ExpiryUnified(locations []cert.Location) {
 					continue
 				}
 
-				fmt.Printf("%s: %s\n", location.Name(), NotAfterDate(certificate.NotAfter()))
+				// the subject distinguishes the certificates in a chain, which
+				// otherwise share a line prefix and cannot be told apart
+				fmt.Printf("%s: %s  %s\n", location.Name(), NotAfterDate(certificate.NotAfter()), expirySubject(certificate))
 			}
 		} else if location.IsCSR() {
 			fmt.Printf("%s: CSR (no expiry)\n", location.Name())
@@ -254,4 +256,15 @@ func printVerification(location cert.Location) {
 		}
 	}
 	fmt.Println()
+}
+
+// expirySubject names a certificate briefly enough to keep the line scannable.
+// The common name is enough to tell one from another; the full distinguished
+// name, which an EV certificate can drag out to several hundred characters, is
+// in the default output and the json.
+func expirySubject(certificate cert.Certificate) string {
+	if name := certificate.CommonName(); name != "" {
+		return name
+	}
+	return certificate.SubjectString()
 }
