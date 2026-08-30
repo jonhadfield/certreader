@@ -69,14 +69,14 @@ func TestPrintCSR(t *testing.T) {
 	})
 }
 
-func TestLocationsUnifiedPrintsCSRs(t *testing.T) {
+func TestLocationsPrintsCSRs(t *testing.T) {
 	locations := cert.Locations{{
 		Path:        "request.csr",
 		ContentType: cert.ContentTypeCSR,
 		CSRs:        loadTestCSRs(t, "csr.pem"),
 	}}
 
-	output := captureStdout(t, func() { LocationsUnified(locations, false, false, false, false) })
+	output := captureStdout(t, func() { Locations(locations, false, false, false, false) })
 
 	assert.Contains(t, output, "request.csr")
 	assert.Contains(t, output, "test.example.com")

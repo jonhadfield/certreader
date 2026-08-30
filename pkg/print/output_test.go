@@ -156,13 +156,13 @@ func TestPrintVerificationOutput(t *testing.T) {
 	})
 }
 
-func TestPemUnifiedBranches(t *testing.T) {
+func TestPemBranches(t *testing.T) {
 
 	t.Run("given certificates then their pem blocks are printed", func(t *testing.T) {
 		chain := newStapleTestChain(t)
 		locations := []cert.Location{chain.location(nil, true)}
 
-		output := captureStdout(t, func() { PemUnified(locations, false) })
+		output := captureStdout(t, func() { Pem(locations, false) })
 
 		assert.Equal(t, 2, strings.Count(output, "BEGIN CERTIFICATE"))
 	})
@@ -174,7 +174,7 @@ func TestPemUnifiedBranches(t *testing.T) {
 			CSRs:        loadTestCSRs(t, "csr.pem"),
 		}}
 
-		output := captureStdout(t, func() { PemUnified(locations, false) })
+		output := captureStdout(t, func() { Pem(locations, false) })
 
 		assert.Contains(t, output, "BEGIN CERTIFICATE REQUEST")
 	})
@@ -182,7 +182,7 @@ func TestPemUnifiedBranches(t *testing.T) {
 	t.Run("given a location that failed to load then the error is printed", func(t *testing.T) {
 		locations := []cert.Location{{Path: "missing.pem", Error: errors.New("no such file")}}
 
-		output := captureStdout(t, func() { PemUnified(locations, false) })
+		output := captureStdout(t, func() { Pem(locations, false) })
 
 		assert.Contains(t, output, "missing.pem")
 		assert.Contains(t, output, "no such file")
@@ -192,20 +192,20 @@ func TestPemUnifiedBranches(t *testing.T) {
 		chain := newStapleTestChain(t)
 		locations := []cert.Location{chain.location(nil, true)}
 
-		output := captureStdout(t, func() { PemUnified(locations, true) })
+		output := captureStdout(t, func() { Pem(locations, true) })
 
 		// the test CA is not trusted, so no chain can be built
 		assert.Contains(t, output, "chains for")
 	})
 }
 
-func TestLocationsUnifiedBranches(t *testing.T) {
+func TestLocationsBranches(t *testing.T) {
 
 	t.Run("given chains are asked for and cannot be built then it says so", func(t *testing.T) {
 		chain := newStapleTestChain(t)
 		locations := cert.Locations{chain.location(nil, true)}
 
-		output := captureStdout(t, func() { LocationsUnified(locations, true, false, false, false) })
+		output := captureStdout(t, func() { Locations(locations, true, false, false, false) })
 
 		assert.Contains(t, output, "chains for")
 	})
@@ -217,19 +217,19 @@ func TestLocationsUnifiedBranches(t *testing.T) {
 			Certificates: cert.Certificates{{}},
 		}}
 
-		output := captureStdout(t, func() { LocationsUnified(locations, false, false, false, false) })
+		output := captureStdout(t, func() { Locations(locations, false, false, false, false) })
 
 		assert.Contains(t, output, "bundle.pem")
 		assert.NotContains(t, output, "Serial Number", "nothing else is safe to read")
 	})
 }
 
-func TestExpiryUnifiedBranches(t *testing.T) {
+func TestExpiryBranches(t *testing.T) {
 
 	t.Run("given a location that failed to load then the error is printed", func(t *testing.T) {
 		locations := cert.Locations{{Path: "missing.pem", Error: errors.New("no such file")}}
 
-		output := captureStdout(t, func() { ExpiryUnified(locations) })
+		output := captureStdout(t, func() { Expiry(locations) })
 
 		assert.Contains(t, output, "missing.pem")
 		assert.Contains(t, output, "ERROR")
@@ -242,7 +242,7 @@ func TestExpiryUnifiedBranches(t *testing.T) {
 			Certificates: cert.Certificates{{}},
 		}}
 
-		output := captureStdout(t, func() { ExpiryUnified(locations) })
+		output := captureStdout(t, func() { Expiry(locations) })
 
 		assert.Contains(t, output, "bundle.pem")
 	})
@@ -251,7 +251,7 @@ func TestExpiryUnifiedBranches(t *testing.T) {
 		certificates := loadTestCertificates(t, "bundle.pem")
 		locations := cert.Locations{{Path: "bundle.pem", Certificates: certificates}}
 
-		output := captureStdout(t, func() { ExpiryUnified(locations) })
+		output := captureStdout(t, func() { Expiry(locations) })
 
 		for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
 			assert.Regexp(t, `bundle\.pem: .+  \S`, line)

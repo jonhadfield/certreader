@@ -192,12 +192,12 @@ func Test_printStapledOCSP(t *testing.T) {
 	})
 }
 
-func TestLocationsUnifiedPrintsStaple(t *testing.T) {
+func TestLocationsPrintsStaple(t *testing.T) {
 	chain := newStapleTestChain(t)
 	location := chain.location(chain.response(t, ocsp.Response{Status: ocsp.Good}), true)
 
 	output := captureStdout(t, func() {
-		LocationsUnified(cert.Locations{location}, false, false, false, false)
+		Locations(cert.Locations{location}, false, false, false, false)
 	})
 
 	assert.Contains(t, output, "certreader.test:443")
