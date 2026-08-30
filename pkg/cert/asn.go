@@ -171,14 +171,24 @@ func toDistributionPoint(in asn1.RawValue) ([]string, error) {
 	// fullName                [0]     GeneralNames,
 	// nameRelativeToCRLIssuer [1]     RelativeDistinguishedName }
 
-	// choice, either general names or relative distinguished name
-	if in.Tag == 0 {
+	// The tag on the value passed in is the [0] of the distributionPoint field
+	// itself, which is the same either way. The choice is the element inside
+	// it, so that is the tag to read: reading the outer one always chose
+	// fullName, and a relative name came out as an empty string rather than a
+	// name or an error.
+	var name asn1.RawValue
+	if _, err := asn1.Unmarshal(in.Bytes, &name); err != nil {
+		return nil, err
+	}
+
+	switch name.Tag {
+	case 0:
 		return ToGeneralNames(in.Bytes)
-	}
-	if in.Tag == 1 {
+	case 1:
 		return ToRelativeDistinguishedName(in.Bytes)
+	default:
+		return nil, fmt.Errorf("unsupported distribution point name tag %d", name.Tag)
 	}
-	return nil, fmt.Errorf("unsupported distribution point tag %d", in.Tag)
 }
 
 // AuthorityKeyIdentifier ::= SEQUENCE {
