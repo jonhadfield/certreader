@@ -50,8 +50,7 @@ func (c *RevocationChecker) downloadIssuer(ctx context.Context, leaf *x509.Certi
 		return nil, err
 	}
 
-	candidate, cached := c.cachedIssuer(url)
-	if !cached {
+	candidate, err := c.issuerCache.get(url, func() (*x509.Certificate, error) {
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {
 			return nil, err
@@ -60,11 +59,10 @@ func (c *RevocationChecker) downloadIssuer(ctx context.Context, leaf *x509.Certi
 		if err != nil {
 			return nil, err
 		}
-		candidate, err = parseIssuerCertificate(raw)
-		if err != nil {
-			return nil, err
-		}
-		c.storeIssuer(url, candidate)
+		return parseIssuerCertificate(raw)
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	// a certificate fetched over plain http is worth nothing until it is shown
@@ -73,24 +71,6 @@ func (c *RevocationChecker) downloadIssuer(ctx context.Context, leaf *x509.Certi
 		return nil, fmt.Errorf("fetched certificate did not sign this one: %w", err)
 	}
 	return candidate, nil
-}
-
-func (c *RevocationChecker) cachedIssuer(url string) (*x509.Certificate, bool) {
-	c.issuerCacheMu.Lock()
-	defer c.issuerCacheMu.Unlock()
-
-	issuer, ok := c.issuerCache[url]
-	return issuer, ok
-}
-
-func (c *RevocationChecker) storeIssuer(url string, issuer *x509.Certificate) {
-	c.issuerCacheMu.Lock()
-	defer c.issuerCacheMu.Unlock()
-
-	if c.issuerCache == nil {
-		c.issuerCache = map[string]*x509.Certificate{}
-	}
-	c.issuerCache[url] = issuer
 }
 
 // parseIssuerCertificate accepts the encodings CAs actually serve.

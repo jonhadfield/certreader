@@ -277,6 +277,11 @@ A status of `unknown` means no source could be reached or trusted — it is not 
 and neither is the absence of a stapled response. Only `revoked` is a firm answer; treat `good` as "no source said
 otherwise at the time it was checked".
 
+A CRL and an issuer certificate are each fetched once per URL for the whole run, however many hosts
+need them, and simultaneous checks share the one fetch rather than each starting their own. A CRL
+from a public CA can be tens of megabytes, so scanning many hosts behind one authority would
+otherwise download the same file once per host.
+
 Requests honour `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`. Each request is bounded by a 10 second timeout, the whole
 check by 30 seconds, and response bodies by 32MB. Revocation is checked only for the default output, not for `-expiry`
 or `-pem-only`.
