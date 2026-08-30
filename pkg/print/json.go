@@ -97,6 +97,9 @@ type jsonVerification struct {
 	Hostname string              `json:"hostname,omitempty"`
 	Chains   int                 `json:"chains"`
 	Problems []jsonVerifyProblem `json:"problems,omitempty"`
+	// ChainWarnings describe how the chain is built rather than whether it
+	// verifies, so they do not affect ok.
+	ChainWarnings []jsonWarning `json:"chain_warnings,omitempty"`
 }
 
 type jsonVerifyProblem struct {
@@ -308,6 +311,9 @@ func buildExtensions(extensions []cert.Extension) []jsonExtension {
 func buildVerification(in *cert.VerificationResult) *jsonVerification {
 
 	out := &jsonVerification{OK: in.OK, Hostname: in.Hostname, Chains: in.Chains}
+	for _, warning := range in.ChainWarnings {
+		out.ChainWarnings = append(out.ChainWarnings, jsonWarning{Code: warning.Code, Message: warning.Message})
+	}
 	for _, problem := range in.Problems {
 		out.Problems = append(out.Problems, jsonVerifyProblem{
 			Code: problem.Code, Message: problem.Message, Subject: problem.Subject,

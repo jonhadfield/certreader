@@ -129,6 +129,33 @@ The distinction between `missing-intermediate` and `untrusted-root` is the usefu
 A hostname is only checked for certificates read from the network, since one read from a file is not
 being served for any particular name. `-server-name` overrides the name checked.
 
+### chain hygiene
+
+`-verify` also reports how the served chain is put together. These are not failures — every one can
+appear on a chain that verifies perfectly well — so they do not change the result:
+
+| code | reported when |
+|------|---------------|
+| `root-included` | the root is served, which no client can use: it either already trusts it or will not trust it now |
+| `duplicate-certificate` | a certificate is sent more than once |
+| `chain-out-of-order` | a certificate does not issue the one before it |
+| `leaf-not-first` | the first certificate sent is a CA, where the end-entity is expected |
+
+```
+Verification
+    Result: verified
+    Chains: 1
+    Hostname: www.digicert.com
+    Chain: the root DigiCert Global Root G2 is sent but cannot be used: a client either already
+           trusts it or will not trust it now (914 bytes per handshake)
+```
+
+Expiry anywhere in the chain, and a missing intermediate, are reported as verification problems
+rather than hygiene, since those do stop a client connecting.
+
+These apply to network locations only. A bundle in a file is expected to hold roots and to be in
+whatever order suits it, so the same checks there would report the file's purpose as a fault.
+
 `-chains` is the display half of the same thing: it prints the chains that were built, where
 `-verify` judges them. Both use one implementation, so they cannot disagree about what a valid chain
 is. Chain building deliberately ignores the hostname, so `-chains` still shows what can be built for
