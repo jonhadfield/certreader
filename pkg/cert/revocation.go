@@ -132,8 +132,10 @@ type RevocationChecker struct {
 	// certificate's authority information access extension.
 	SkipIssuerFetch bool
 
-	issuerCacheMu sync.Mutex
-	issuerCache   map[string]*x509.Certificate
+	// A CRL from a public CA can be tens of megabytes, and a scan of many
+	// hosts behind one authority would otherwise download it once per host.
+	crlCache    singleFlightCache[*x509.RevocationList]
+	issuerCache singleFlightCache[*x509.Certificate]
 
 	defaultClientOnce sync.Once
 	defaultClient     *http.Client
@@ -339,17 +341,7 @@ func (c *RevocationChecker) queryCRL(ctx context.Context, leaf, issuer *x509.Cer
 		return nil, err
 	}
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, point, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	raw, err := c.do(request)
-	if err != nil {
-		return nil, err
-	}
-
-	list, err := parseCRL(raw)
+	list, err := c.fetchCRL(ctx, point)
 	if err != nil {
 		return nil, err
 	}
@@ -382,6 +374,25 @@ func (c *RevocationChecker) queryCRL(ctx context.Context, leaf, issuer *x509.Cer
 		break
 	}
 	return status, nil
+}
+
+// fetchCRL downloads and parses a revocation list, once per url however many
+// certificates are being checked against it. The signature is deliberately not
+// checked here: that is per certificate, since two hosts sharing a distribution
+// point need not share an issuer.
+func (c *RevocationChecker) fetchCRL(ctx context.Context, point string) (*x509.RevocationList, error) {
+
+	return c.crlCache.get(point, func() (*x509.RevocationList, error) {
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, point, nil)
+		if err != nil {
+			return nil, err
+		}
+		raw, err := c.do(request)
+		if err != nil {
+			return nil, err
+		}
+		return parseCRL(raw)
+	})
 }
 
 // do issues a request and reads a bounded response body.
