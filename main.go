@@ -56,6 +56,9 @@ func main() {
 	if flags.SortExpiry {
 		locations = locations.SortByExpiry()
 	}
+	if flags.Verify {
+		locations = locations.Verify()
+	}
 	if flags.Revocation && revocationIsRendered(flags) {
 		ctx, cancel := context.WithTimeout(context.Background(), flags.Timeout*revocationBudgetMultiple)
 		checker := &cert.RevocationChecker{RequestTimeout: flags.Timeout * revocationRequestMultiple}

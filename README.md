@@ -51,6 +51,7 @@ certreader [flags] [<file>|<host:port> ...]
 | -starttls     | upgrade a plaintext connection to tls: smtp, imap, pop3, ftp, nntp, ldap, postgres                |
 | -sort-expiry  | sort certificates by expiration date                                                              |
 | -subject-like | print certificates with issuer field containing supplied string                                   |
+| -verify       | verify against the system trust store and report why it fails                                     |
 | -timeout      | how long to wait for a connection, and proportionally longer for revocation requests (default 5s)  |
 | -more         | use a combination of the '-pem -signature -chains' flags                                          |
 | -version      | certreader version                                                                                  |
@@ -94,6 +95,42 @@ where a certificate is usually being inspected; give `host:25` explicitly for th
 
 This applies to network arguments only, and combines with everything else — `-json`, `-revocation`
 and `-expiring-within` all work the same over an upgraded connection.
+
+## verify
+
+`-verify` checks the certificate against the system trust store, and against the hostname when the
+certificate came from the network, and says why it failed rather than only that it did.
+
+```shell script
+certreader -verify example.com:443
+```
+
+```
+Verification
+    Result: verified
+    Chains: 1
+    Hostname: example.com
+```
+
+Each failure is reported with a stable `code` in `-json` output:
+
+| code | meaning |
+|------|---------|
+| `expired` / `not-yet-valid` | a certificate in the chain is outside its validity period |
+| `hostname-mismatch` | the chain is sound, but not for the name it was served under |
+| `self-signed` | not issued by any certificate authority |
+| `missing-intermediate` | the issuer was never supplied, so the chain cannot be built |
+| `untrusted-root` | the chain is complete but does not reach the system trust store |
+| `no-end-entity` | there was nothing to verify |
+
+The distinction between `missing-intermediate` and `untrusted-root` is the useful one: both appear as
+"unknown authority" otherwise, and the fixes differ — serve the intermediate, or trust the root.
+
+A hostname is only checked for certificates read from the network, since one read from a file is not
+being served for any particular name. `-server-name` overrides the name checked.
+
+Verification is independent of `-chains`, which shows the chains that were built rather than
+explaining a failure, and does not check the hostname at all.
 
 ## warnings
 
