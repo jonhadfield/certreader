@@ -36,6 +36,7 @@ certreader [flags] [<file>|<host:port> ...]
 | -clipboard    | read input from clipboard (only if the clipboard is supported)                                    |
 | -expiry       | print expiry of certificates                                                                      |
 | -expiring-within | exit non-zero if any certificate expires within this window, e.g. 30d, 2w, 72h                  |
+| -fail-on-warning | exit non-zero if any certificate or chain warning is reported                                   |
 | -extensions   | whether to print extensions                                                                       |
 | -insecure     | whether a client verifies the server's certificate chain and host name (only applicable for host) |
 | -issuer-like  | print certificates with subject field containing supplied string                                  |
@@ -190,9 +191,19 @@ flagging every SHA-1 era root would be noise. The validity and name rules apply 
 offered for server authentication, and only from September 2020, when the 398 day limit took effect —
 certificates issued before it were legitimately longer lived.
 
-Warnings do not affect the exit code. Whether a weak certificate should fail a check is a policy
-decision, and quietly changing what an existing `-expiring-within` check returns would be the wrong
+Warnings do not affect the exit code by default. Whether a weak certificate should fail a check is a
+policy decision, and changing what an existing `-expiring-within` check returns would be the wrong
 way to make it.
+
+`-fail-on-warning` opts in: any warning then counts as a failed check and exits `2`, alongside
+revoked and expiring certificates.
+
+```shell script
+certreader -verify -fail-on-warning example.com:443 || echo "needs attention"
+```
+
+Chain warnings are only worked out by `-verify`, so `-fail-on-warning` without it considers the
+certificates alone.
 
 ## exit codes
 
