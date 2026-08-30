@@ -7,6 +7,7 @@ import (
 	"github.com/jonhadfield/certreader/pkg/cert"
 	"github.com/jonhadfield/certreader/pkg/print"
 	"log/slog"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -181,12 +182,33 @@ func loadFromArg(arg string, flags Flags) cert.Location {
 	if isTCPNetworkAddress(arg) {
 		return cert.LoadFromNetwork(arg, options)
 	}
-	if _, err := os.Stat(arg); err != nil && os.IsNotExist(err) && looksLikeFQDN(arg) {
-		location := cert.LoadFromNetwork(arg+":"+defaultPort(flags.StartTLS), options)
-		location.Path = arg
-		return location
+	if _, err := os.Stat(arg); err != nil && os.IsNotExist(err) {
+		if host, ok := bareHost(arg); ok {
+			location := cert.LoadFromNetwork(net.JoinHostPort(host, defaultPort(flags.StartTLS)), options)
+			location.Path = arg
+			return location
+		}
 	}
 	return cert.LoadFromFile(arg, flags.PfxPassword)
+}
+
+// bareHost reports the host named by an argument that carries no port, which
+// is then assumed. A hostname or an IPv4 address reads as it is written; an
+// IPv6 address may also be written in the brackets that would separate it from
+// the port it does not have.
+func bareHost(arg string) (string, bool) {
+	if looksLikeFQDN(arg) {
+		return arg, true
+	}
+
+	address := arg
+	if strings.HasPrefix(address, "[") && strings.HasSuffix(address, "]") {
+		address = address[1 : len(address)-1]
+	}
+	if ip := net.ParseIP(address); ip != nil && ip.To4() == nil {
+		return address, true
+	}
+	return "", false
 }
 
 // defaultPort is the port assumed for a bare hostname. Without -starttls that
@@ -313,16 +335,21 @@ var promptForPasswordInput = func(path string, attempt int) (string, bool) {
 	return strings.TrimSpace(string(passwordBytes)), true
 }
 
+// isTCPNetworkAddress reports whether the argument names a host and a port to
+// connect to rather than a file to read. Splitting on the colon by hand meant
+// an IPv6 address, which is mostly colons, was never a network address and was
+// opened as a file instead.
+//
+// The port still has to be numeric. A Windows path splits into a drive letter
+// and the rest, and that is a file, as is a bare IPv6 address written without
+// the brackets that say where the address ends and the port begins.
 func isTCPNetworkAddress(arg string) bool {
-
-	parts := strings.Split(arg, ":")
-	if len(parts) != 2 {
+	_, port, err := net.SplitHostPort(arg)
+	if err != nil {
 		return false
 	}
-	if _, err := strconv.Atoi(parts[1]); err != nil {
-		return false
-	}
-	return true
+	_, err = strconv.Atoi(port)
+	return err == nil
 }
 
 func looksLikeFQDN(s string) bool {

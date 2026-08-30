@@ -88,6 +88,27 @@ func TestIsTCPNetworkAddress(t *testing.T) {
 		assert.False(t, isTCPNetworkAddress("host:port:extra"))
 	})
 
+	t.Run("given a bracketed IPv6 address and port, when isTCPNetworkAddress called, then returns true", func(t *testing.T) {
+		// An IPv6 address is mostly colons, so splitting on the colon by hand
+		// never saw one of these as an address to connect to and it was opened
+		// as a file instead.
+		assert.True(t, isTCPNetworkAddress("[::1]:443"))
+		assert.True(t, isTCPNetworkAddress("[2606:2800:21f::1]:443"))
+		assert.True(t, isTCPNetworkAddress("[fe80::1%eth0]:443"))
+	})
+
+	t.Run("given an IPv6 address without brackets or port, when isTCPNetworkAddress called, then returns false", func(t *testing.T) {
+		// Nothing says where the address ends and a port begins.
+		assert.False(t, isTCPNetworkAddress("::1:443"))
+		assert.False(t, isTCPNetworkAddress("[::1]"))
+		assert.False(t, isTCPNetworkAddress("[::1]:https"))
+	})
+
+	t.Run("given a windows path, when isTCPNetworkAddress called, then returns false", func(t *testing.T) {
+		// It splits into a drive letter and the rest, and it is a file.
+		assert.False(t, isTCPNetworkAddress(`C:\certs\bundle.pem`))
+	})
+
 	t.Run("given non-numeric port, when isTCPNetworkAddress called, then returns false", func(t *testing.T) {
 		assert.False(t, isTCPNetworkAddress("google.com:https"))
 		assert.False(t, isTCPNetworkAddress("example.com:abc"))
