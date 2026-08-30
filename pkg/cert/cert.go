@@ -160,6 +160,13 @@ func (c Certificates) SubjectLike(subject string) Certificates {
 func (c Certificates) IssuerLike(issuer string) Certificates {
 	var out Certificates
 	for i := range c {
+		// A block that did not parse has no issuer, so it cannot match, and
+		// filtering drops it as it does any other certificate that does not
+		// match. SubjectLike already behaves this way: the error text it
+		// compares against rarely contains what is being searched for.
+		if c[i].Error() != nil {
+			continue
+		}
 		if strings.Contains(c[i].x509Certificate.Issuer.String(), issuer) {
 			out = append(out, c[i])
 		}
@@ -168,10 +175,24 @@ func (c Certificates) IssuerLike(issuer string) Certificates {
 }
 
 func (c Certificates) SortByExpiry() Certificates {
-	slices.SortFunc(c, func(a, b Certificate) int {
-		return a.x509Certificate.NotAfter.Compare(b.x509Certificate.NotAfter)
-	})
+	slices.SortStableFunc(c, compareExpiry)
 	return c
+}
+
+// compareExpiry orders certificates by expiry date, putting those whose expiry
+// cannot be read after those whose can.
+func compareExpiry(a, b Certificate) int {
+	aTime, aOK := a.expiry()
+	bTime, bOK := b.expiry()
+	switch {
+	case !aOK && !bOK:
+		return 0
+	case !aOK:
+		return 1
+	case !bOK:
+		return -1
+	}
+	return aTime.Compare(bTime)
 }
 
 type Certificate struct {
@@ -306,9 +327,19 @@ func fromPemBlock(position int, block *pem.Block) Certificate {
 	return Certificate{position: position, x509Certificate: certificate}
 }
 
+// expiry reports when the certificate expires, and whether there is a date to
+// report at all. A block that did not parse has no expiry, and reaching for
+// one dereferences a certificate that was never built.
+func (c Certificate) expiry() (time.Time, bool) {
+	if c.Error() != nil {
+		return time.Time{}, false
+	}
+	return c.x509Certificate.NotAfter, true
+}
+
 func (c Certificate) IsExpired() bool {
 
-	if c.err != nil {
+	if c.Error() != nil {
 		return false
 	}
 	return time.Now().After(c.x509Certificate.NotAfter)
@@ -316,7 +347,7 @@ func (c Certificate) IsExpired() bool {
 
 func (c Certificate) ToPEM() []byte {
 
-	if c.err != nil {
+	if c.Error() != nil {
 		return nil
 	}
 
@@ -335,8 +366,8 @@ func (c Certificate) CommonName() string {
 
 func (c Certificate) SubjectString() string {
 
-	if c.err != nil {
-		return fmt.Sprintf("ERROR: block at position %d: %v", c.position, c.err)
+	if err := c.Error(); err != nil {
+		return err.Error()
 	}
 	var subject pkix.RDNSequence
 	if _, err := asn1.Unmarshal(c.x509Certificate.RawSubject, &subject); err != nil {

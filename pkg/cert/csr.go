@@ -94,7 +94,7 @@ func fromCSRPemBlock(position int, block *pem.Block) CSR {
 }
 
 func (c CSR) ToPEM() []byte {
-	if c.err != nil {
+	if c.Error() != nil {
 		return nil
 	}
 
@@ -105,8 +105,8 @@ func (c CSR) ToPEM() []byte {
 }
 
 func (c CSR) SubjectString() string {
-	if c.err != nil {
-		return fmt.Sprintf("ERROR: block at position %d: %v", c.position, c.err)
+	if err := c.Error(); err != nil {
+		return err.Error()
 	}
 
 	var subject pkix.RDNSequence

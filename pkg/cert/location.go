@@ -124,20 +124,43 @@ func (l Locations) SortByExpiry() Locations {
 		out = append(out, l[i].SortByExpiry())
 	}
 
-	// sort locations by first certificate (they have been already sorted)
-	slices.SortFunc(out, func(a, b Location) int {
-		if len(a.Certificates) == 0 && len(b.Certificates) == 0 {
+	// sort locations by the certificate that expires first, which is the
+	// earliest date the location needs attention
+	slices.SortStableFunc(out, func(a, b Location) int {
+		aTime, aOK := a.earliestExpiry()
+		bTime, bOK := b.earliestExpiry()
+		switch {
+		case !aOK && !bOK:
 			return 0
-		}
-		if len(a.Certificates) == 0 {
+		case !aOK:
 			return 1
-		}
-		if len(b.Certificates) == 0 {
+		case !bOK:
 			return -1
 		}
-		return a.Certificates[0].x509Certificate.NotAfter.Compare(b.Certificates[0].x509Certificate.NotAfter)
+		return aTime.Compare(bTime)
 	})
 	return out
+}
+
+// earliestExpiry reports the earliest expiry among the location's
+// certificates, and whether any of them had one to read. A location holding
+// nothing but blocks that failed to parse has no expiry, and neither does an
+// empty one.
+func (l Location) earliestExpiry() (time.Time, bool) {
+	var (
+		earliest time.Time
+		found    bool
+	)
+	for i := range l.Certificates {
+		expiry, ok := l.Certificates[i].expiry()
+		if !ok {
+			continue
+		}
+		if !found || expiry.Before(earliest) {
+			earliest, found = expiry, true
+		}
+	}
+	return earliest, found
 }
 
 func (l Location) RemoveExpired() Location {
