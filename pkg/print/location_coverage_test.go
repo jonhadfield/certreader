@@ -8,6 +8,7 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -156,6 +157,29 @@ func TestPemUnified(t *testing.T) {
 
 		assert.Contains(t, string(output), "error.pem")
 	})
+}
+
+func TestExpiryUnifiedNamesEachCertificate(t *testing.T) {
+	// every line shares the location prefix, so without a name the
+	// certificates in a chain cannot be told apart
+	certs := createTestCertificates(t, 2)
+	locations := cert.Locations{{Path: "test.pem", Certificates: certs}}
+
+	output := captureStdout(t, func() { ExpiryUnified(locations) })
+
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		assert.Contains(t, line, "test.pem:")
+		assert.Regexp(t, `test\.pem: .+  \S`, line, "the line should end with a name")
+	}
+}
+
+func Test_expirySubject(t *testing.T) {
+	certs := createTestCertificates(t, 1)
+	require.NotEmpty(t, certs)
+
+	// the common name is enough, and keeps the line short
+	assert.Equal(t, certs[0].CommonName(), expirySubject(certs[0]))
+	assert.NotContains(t, expirySubject(certs[0]), "CN=", "the full distinguished name would be too long")
 }
 
 func TestExpiryUnified(t *testing.T) {

@@ -213,3 +213,12 @@ func TestFromBytesDoesNotTrimBinary(t *testing.T) {
 		require.NotEmpty(t, certificates)
 	})
 }
+
+func TestCertificateCommonName(t *testing.T) {
+	certificates := loadTestCertificates(t, "cert.pem")
+	require.NotEmpty(t, certificates)
+
+	assert.Equal(t, "DigiCert Global Root G2", certificates[0].CommonName())
+	assert.Contains(t, certificates[0].SubjectString(), certificates[0].CommonName(),
+		"the common name should be part of the full subject")
+}
