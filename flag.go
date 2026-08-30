@@ -38,18 +38,21 @@ type Flags struct {
 	// FailOnWarning widens what counts as a failed check to include warnings,
 	// which are otherwise reported without affecting the exit code.
 	FailOnWarning bool
-	Chains        bool
-	Extensions    bool
-	Signature     bool
-	Pem           bool
-	PemOnly       bool
-	JSON          bool
-	Verbose       bool
-	Version       bool
-	More          bool
-	Clipboard     bool
-	PfxPassword   string
-	Args          []string
+	// Concurrency bounds how many locations are read at once. Zero means no
+	// bound.
+	Concurrency int
+	Chains      bool
+	Extensions  bool
+	Signature   bool
+	Pem         bool
+	PemOnly     bool
+	JSON        bool
+	Verbose     bool
+	Version     bool
+	More        bool
+	Clipboard   bool
+	PfxPassword string
+	Args        []string
 }
 
 func ParseFlags() (Flags, error) {
@@ -83,6 +86,8 @@ func ParseFlags() (Flags, error) {
 		"whether a client verifies the server's certificate chain and host name (only applicable for host)")
 	flagSet.BoolVar(&flags.Revocation, "revocation", getBoolEnv("CERTREADER_REVOCATION", false),
 		"check revocation status via OCSP, falling back to CRL (makes network requests)")
+	flagSet.IntVar(&flags.Concurrency, "concurrency", getIntEnv("CERTREADER_CONCURRENCY", defaultConcurrency),
+		"how many locations to read at once, 0 for no limit")
 	flagSet.BoolVar(&flags.FailOnWarning, "fail-on-warning", getBoolEnv("CERTREADER_FAIL_ON_WARNING", false),
 		"exit non-zero if any certificate or chain warning is reported")
 	flagSet.BoolVar(&flags.Verify, "verify", getBoolEnv("CERTREADER_VERIFY", false),
@@ -127,6 +132,10 @@ func ParseFlags() (Flags, error) {
 		return Flags{}, fmt.Errorf("-timeout: %w", err)
 	}
 	flags.Timeout = timeout
+
+	if flags.Concurrency < 0 {
+		return Flags{}, fmt.Errorf("-concurrency: %d is negative", flags.Concurrency)
+	}
 
 	protocol, err := cert.ParseStartTLSProtocol(startTLS)
 	if err != nil {
@@ -241,4 +250,23 @@ func parseTimeout(in string) (time.Duration, error) {
 		return 0, fmt.Errorf("%q is not positive", in)
 	}
 	return timeout, nil
+}
+
+// defaultConcurrency bounds how many locations are read at once. It is set well
+// above what anyone checking a handful of hosts will reach, so the common case
+// is unaffected, while still holding a scan of hundreds to a number of sockets
+// a machine will lend it.
+const defaultConcurrency = 100
+
+func getIntEnv(envName string, defaultValue int) int {
+
+	env, ok := os.LookupEnv(envName)
+	if !ok {
+		return defaultValue
+	}
+	value, err := strconv.Atoi(env)
+	if err != nil {
+		return defaultValue
+	}
+	return value
 }

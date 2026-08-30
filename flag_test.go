@@ -338,3 +338,54 @@ func TestParseFlagsFailOnWarning(t *testing.T) {
 		assert.True(t, flags.FailOnWarning)
 	})
 }
+
+func TestParseFlagsConcurrency(t *testing.T) {
+
+	t.Run("given no flag then the default applies", func(t *testing.T) {
+		setInput(t, []string{"flag"}, nil)
+
+		flags, err := ParseFlags()
+		require.NoError(t, err)
+		assert.Equal(t, defaultConcurrency, flags.Concurrency)
+	})
+
+	t.Run("given a limit then it is used", func(t *testing.T) {
+		setInput(t, []string{"flag", "-concurrency=8"}, nil)
+
+		flags, err := ParseFlags()
+		require.NoError(t, err)
+		assert.Equal(t, 8, flags.Concurrency)
+	})
+
+	t.Run("given zero then there is no limit", func(t *testing.T) {
+		setInput(t, []string{"flag", "-concurrency=0"}, nil)
+
+		flags, err := ParseFlags()
+		require.NoError(t, err)
+		assert.Zero(t, flags.Concurrency)
+	})
+
+	t.Run("given the env var then it is used", func(t *testing.T) {
+		setInput(t, []string{"flag"}, map[string]string{"CERTREADER_CONCURRENCY": "16"})
+
+		flags, err := ParseFlags()
+		require.NoError(t, err)
+		assert.Equal(t, 16, flags.Concurrency)
+	})
+
+	t.Run("given a negative limit then parsing fails", func(t *testing.T) {
+		setInput(t, []string{"flag", "-concurrency=-1"}, nil)
+
+		_, err := ParseFlags()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "-concurrency")
+	})
+
+	t.Run("given a nonsense env var then the default applies", func(t *testing.T) {
+		setInput(t, []string{"flag"}, map[string]string{"CERTREADER_CONCURRENCY": "lots"})
+
+		flags, err := ParseFlags()
+		require.NoError(t, err)
+		assert.Equal(t, defaultConcurrency, flags.Concurrency)
+	})
+}
