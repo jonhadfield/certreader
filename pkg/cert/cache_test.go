@@ -2,6 +2,7 @@ package cert
 
 import (
 	"context"
+	"crypto/x509"
 	"errors"
 	"net/http"
 	"sync"
@@ -196,4 +197,55 @@ func TestIssuerIsFetchedOnceConcurrently(t *testing.T) {
 	wg.Wait()
 
 	assert.Equal(t, int64(1), issuerServer.calls.Load())
+}
+
+func TestCheckRevocationConcurrencyCap(t *testing.T) {
+
+	// a responder that reports the most requests it ever had in flight, since
+	// that is the only thing worth asserting about a cap
+	measure := func(t *testing.T, limit int) int64 {
+		t.Helper()
+
+		var inFlight, peak atomic.Int64
+		responder := newStubServer(t)
+		chain := newOCSPTestChain(t, withOCSPServer(responder.URL))
+		response := chain.response(t, ocsp.Response{Status: ocsp.Good})
+
+		responder.serve(func(w http.ResponseWriter, _ *http.Request) {
+			current := inFlight.Add(1)
+			for {
+				highest := peak.Load()
+				if current <= highest || peak.CompareAndSwap(highest, current) {
+					break
+				}
+			}
+			time.Sleep(20 * time.Millisecond)
+			inFlight.Add(-1)
+			_, _ = w.Write(response)
+		})
+
+		var locations Locations
+		for i := 0; i < 24; i++ {
+			locations = append(locations, Location{
+				Path:         "host.test:443",
+				ContentType:  ContentTypeCertificate,
+				Certificates: FromX509Certificates([]*x509.Certificate{chain.leaf, chain.issuer}),
+			})
+		}
+
+		checker := &RevocationChecker{Concurrency: limit}
+		for _, location := range locations.CheckRevocation(context.Background(), checker) {
+			require.Equal(t, "good", location.Revocation.Status)
+		}
+		return peak.Load()
+	}
+
+	t.Run("given a limit then no more checks run at once", func(t *testing.T) {
+		assert.LessOrEqual(t, measure(t, 3), int64(3))
+	})
+
+	t.Run("given no limit then they are not held back", func(t *testing.T) {
+		// every location starts at once, which is the behaviour the cap bounds
+		assert.Greater(t, measure(t, 0), int64(3))
+	})
 }

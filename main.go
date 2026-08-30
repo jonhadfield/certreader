@@ -61,7 +61,10 @@ func main() {
 	}
 	if flags.Revocation && revocationIsRendered(flags) {
 		ctx, cancel := context.WithTimeout(context.Background(), flags.Timeout*revocationBudgetMultiple)
-		checker := &cert.RevocationChecker{RequestTimeout: flags.Timeout * revocationRequestMultiple}
+		checker := &cert.RevocationChecker{
+			RequestTimeout: flags.Timeout * revocationRequestMultiple,
+			Concurrency:    flags.Concurrency,
+		}
 		locations = locations.CheckRevocation(ctx, checker)
 		// not deferred, because the process exits below without unwinding
 		cancel()
@@ -133,6 +136,11 @@ func loadFromArgs(args []string, flags Flags) cert.Locations {
 		arg      string
 		location cert.Location
 	}
+	// One socket per argument, all at once, is fine for a handful of hosts and
+	// less so for a list of hundreds, which can outrun the file descriptors a
+	// machine will lend it.
+	slots := newSemaphore(flags.Concurrency)
+
 	out := make(chan result)
 	go func() {
 		var wg sync.WaitGroup
@@ -140,6 +148,8 @@ func loadFromArgs(args []string, flags Flags) cert.Locations {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
+				slots.acquire()
+				defer slots.release()
 				out <- result{arg: arg, location: loadFromArg(arg, flags)}
 			}()
 		}

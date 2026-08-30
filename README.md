@@ -33,6 +33,7 @@ certreader [flags] [<file>|<host:port> ...]
 | optional flags                                                                                                    |
 +---------------+---------------------------------------------------------------------------------------------------+
 | -chains       | whether to print verified chains as well                                                          |
+| -concurrency  | how many locations to read at once, 0 for no limit (default 100)                                  |
 | -clipboard    | read input from clipboard (only if the clipboard is supported)                                    |
 | -expiry       | print expiry of certificates                                                                      |
 | -expiring-within | exit non-zero if any certificate expires within this window, e.g. 30d, 2w, 72h                  |
@@ -337,6 +338,19 @@ they became configurable.
 ```shell script
 certreader -timeout 30s -revocation slow.example.com:443
 ```
+
+## concurrency
+
+Arguments are read at the same time rather than one after another, so checking many hosts is quick.
+`-concurrency` bounds how many at once, defaulting to 100.
+
+The default sits well above what checking a handful of hosts will reach, so ordinary use is
+unaffected, while a list of hundreds is held to a number of sockets a machine will lend it. Lower it
+if you hit file descriptor limits or upstream rate limits; `-concurrency 0` removes the bound
+entirely.
+
+The same bound applies to revocation checks. Each check can make several requests of its own, so it
+counts conversations in flight rather than sockets.
 
 If you need to run against multiple hosts, it is faster to execute command with multiple arguments e.g.
 `certreader -insecure -expiry google.com:443 amazon.com:443 ...` rather than executing command multiple times. Args are

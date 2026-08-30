@@ -128,6 +128,9 @@ type RevocationChecker struct {
 	// RequestTimeout bounds a single OCSP, CRL or issuer request. Zero selects
 	// the default.
 	RequestTimeout time.Duration
+	// Concurrency bounds how many locations are checked at once. Zero means no
+	// bound.
+	Concurrency int
 	// SkipIssuerFetch stops a missing issuer being downloaded from the
 	// certificate's authority information access extension.
 	SkipIssuerFetch bool
@@ -492,6 +495,13 @@ func (l Locations) CheckRevocation(ctx context.Context, checker *RevocationCheck
 	out := make(Locations, len(l))
 	copy(out, l)
 
+	// each check can make several requests of its own, so this is the number
+	// of conversations in flight rather than the number of sockets
+	var slots chan struct{}
+	if checker.Concurrency > 0 {
+		slots = make(chan struct{}, checker.Concurrency)
+	}
+
 	var wg sync.WaitGroup
 	for i := range out {
 		if out[i].Error != nil || !out[i].IsCertificate() || len(out[i].Certificates) == 0 {
@@ -500,6 +510,10 @@ func (l Locations) CheckRevocation(ctx context.Context, checker *RevocationCheck
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			if slots != nil {
+				slots <- struct{}{}
+				defer func() { <-slots }()
+			}
 			leaf, issuer := out[i].leafAndIssuer()
 			out[i].Revocation = checker.Check(ctx, leaf, issuer, out[i].OCSPStaple)
 		}()
