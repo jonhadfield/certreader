@@ -43,6 +43,7 @@ certreader [flags] [<file>|<host:port> ...]
 | -chains       | whether to print verified chains as well                                                          |
 | -concurrency  | how many locations to read at once, 0 for no limit (default 100)                                  |
 | -clipboard    | read input from clipboard (only if the clipboard is supported)                                    |
+| -compare      | compare two locations and report whether they serve the same certificate                          |
 | -csr          | force CSR mode (CSRs are auto-detected, so this is optional)                                      |
 | -expiry       | print expiry of certificates                                                                      |
 | -expiring-within | exit non-zero if any certificate expires within this window, e.g. 30d, 2w, 72h                  |
@@ -95,6 +96,44 @@ The rest of the request is still printed either way — it is what the request c
 alongside the reason not to believe it. `-fail-on-warning` exits non-zero on one that does not
 verify, and `-json` carries `self_signature_valid` along with a warning coded
 `invalid-self-signature`.
+
+## compare
+
+`-compare` takes two locations and says whether they are serving the same certificate:
+
+```shell script
+certreader -compare deployed.pem www.example.com:443
+```
+
+```
+--- [deployed.pem vs www.example.com:443 TLS 1.3] ---
+Certificate: same
+    SHA-256: 8F:95:CC:30:E8:8F:6B:71:EF:35:1F:71:03:32:85:0C:55:44:E7:59:4A:F4:0B:1A:7E:11:9E:18:EF:D6:10:22
+Public Key: same
+Chain: different (deployed.pem sends 1, www.example.com:443 sends 3)
+Result: the same certificate, sent with a different chain
+```
+
+The chain is reported but is not a difference worth failing on: deploying a leaf and serving it with
+the intermediates a client needs is normal. Only the certificate decides the exit code, so
+
+```shell script
+certreader -compare deployed.pem www.example.com:443 || echo "not serving what was deployed"
+```
+
+exits 0 when the certificate matches, 2 when it does not, and 1 if either location could not be read.
+
+When the certificates differ, the key is the interesting half — it separates a reissue from a
+rotation:
+
+```
+Certificate: different
+Public Key: same
+Result: different certificates carrying the same key, which is what a reissue looks like
+```
+
+`-json` gives the same answer as a document, with `same`, `same_certificate`, `same_key`,
+`same_chain` and both fingerprints.
 
 ## fingerprints
 
