@@ -54,3 +54,14 @@ func TestCheckSelfSignature(t *testing.T) {
 		assert.Empty(t, broken.Warnings())
 	})
 }
+
+func TestCSRVersion(t *testing.T) {
+	// PKCS#10 numbers versions from zero, so the only version defined encodes
+	// as 0. x509.Certificate.Version counts from one, so a current certificate
+	// reports 3. Printing both under the same label made a request look like
+	// version 0 next to a certificate's 3, when both are current.
+	csr := loadTestCSRs(t, "csr_san.pem")[0]
+
+	assert.Equal(t, 0, csr.Version(), "the encoded value")
+	assert.Equal(t, 1, csr.VersionNumber(), "the version people write")
+}

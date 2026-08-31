@@ -72,7 +72,8 @@ type jsonWarning struct {
 
 type jsonCSR struct {
 	Error string `json:"error,omitempty"`
-	// a pointer because PKCS#10 v1 encodes as 0, which omitempty would hide
+	// the version people write, counting from one, so that it means what a
+	// certificate's version field means in the same document
 	Version            *int     `json:"version,omitempty"`
 	Subject            string   `json:"subject,omitempty"`
 	SignatureAlgorithm string   `json:"signature_algorithm,omitempty"`
@@ -281,7 +282,7 @@ func buildCSR(csr cert.CSR, opts Options) jsonCSR {
 		return out
 	}
 
-	version := csr.Version()
+	version := csr.VersionNumber()
 	out.Version = &version
 	out.Subject = csr.SubjectString()
 	out.SignatureAlgorithm = csr.SignatureAlgorithm()

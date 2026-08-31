@@ -24,7 +24,10 @@ func printCSR(csr cert.CSR, printExtensions, printSignature bool) {
 		return
 	}
 
-	fmt.Printf("%s: %d\n", AttributeName("Version"), csr.Version())
+	// the number and the encoding, as openssl shows it: the label has to mean
+	// the same thing it does for a certificate, and the encoded value is still
+	// what anyone comparing against the bytes will see
+	fmt.Printf("%s: %d (0x%x)\n", AttributeName("Version"), csr.VersionNumber(), csr.Version())
 	fmt.Printf("%s: %s\n", AttributeName("Signature Algorithm"), csr.SignatureAlgorithm())
 	fmt.Printf("%s: %s\n", AttributeName("Subject"), csr.SubjectString())
 	fmt.Printf("%s: %s\n", AttributeName("DNS Names"), strings.Join(csr.DNSNames(), ", "))
