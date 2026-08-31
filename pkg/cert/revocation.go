@@ -195,7 +195,7 @@ func (c *RevocationChecker) Check(ctx context.Context, leaf, issuer *x509.Certif
 		})
 		return status
 	}
-	status.SerialNumber = formatHexArray(leaf.SerialNumber.Bytes())
+	status.SerialNumber = formatSerialNumber(leaf.SerialNumber)
 
 	// without an issuer nothing can be authenticated and OCSP cannot even be
 	// asked, so it is worth a request to go and get one
@@ -362,7 +362,7 @@ func (c *RevocationChecker) queryCRL(ctx context.Context, leaf, issuer *x509.Cer
 		Source:            RevocationSourceCRL,
 		URL:               point,
 		Status:            ocspStatusGood,
-		SerialNumber:      formatHexArray(leaf.SerialNumber.Bytes()),
+		SerialNumber:      formatSerialNumber(leaf.SerialNumber),
 		ThisUpdate:        list.ThisUpdate,
 		NextUpdate:        list.NextUpdate,
 		SignatureVerified: verified,

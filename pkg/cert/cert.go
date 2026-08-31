@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/big"
 	"slices"
 	"strings"
 	"time"
@@ -418,7 +419,7 @@ func (c Certificate) Version() int {
 }
 
 func (c Certificate) SerialNumber() string {
-	return formatHexArray(c.x509Certificate.SerialNumber.Bytes())
+	return formatSerialNumber(c.x509Certificate.SerialNumber)
 }
 
 func (c Certificate) SignatureAlgorithm() string {
@@ -512,6 +513,34 @@ func (c Certificate) Extensions() []Extension {
 		})
 	}
 	return out
+}
+
+// formatSerialNumber renders a serial as the colon separated hex openssl and
+// the browsers show.
+//
+// A serial of zero encodes as a single zero byte, but big.Int.Bytes returns
+// nothing at all for it, so the number that names the certificate came out as
+// an empty field. RFC 5280 requires a positive serial and eight of the roots
+// in a system trust store have one anyway, among them Go Daddy's and
+// Starfield's.
+//
+// A negative serial is out of spec too, and Bytes drops the sign, so it is
+// written back on rather than quietly rendering a different number. Go refuses
+// to parse a certificate with one, so this only arises for a serial that
+// reached here another way, such as from a revocation response.
+func formatSerialNumber(serial *big.Int) string {
+	if serial == nil {
+		return ""
+	}
+
+	digits := formatHexArray(serial.Bytes())
+	if digits == "" {
+		digits = "00"
+	}
+	if serial.Sign() < 0 {
+		return "-" + digits
+	}
+	return digits
 }
 
 func formatHexArray(b []byte) string {
