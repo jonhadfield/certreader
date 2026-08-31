@@ -39,6 +39,8 @@ type jsonCertificate struct {
 	// everything below is absent when the certificate failed to parse
 	Version            int             `json:"version,omitempty"`
 	SerialNumber       string          `json:"serial_number,omitempty"`
+	Fingerprint        string          `json:"fingerprint_sha256,omitempty"`
+	PublicKeyID        string          `json:"public_key_sha256,omitempty"`
 	SignatureAlgorithm string          `json:"signature_algorithm,omitempty"`
 	Type               string          `json:"type,omitempty"`
 	Issuer             string          `json:"issuer,omitempty"`
@@ -152,15 +154,15 @@ type jsonRevocationTry struct {
 // to stderr, so the document on stdout stays machine readable even with
 // -verbose. The extension, signature and pem fields are included only when the
 // corresponding flags are set, matching what the text output would show.
-func JSON(locations []cert.Location, printChains, printPem, printExtensions, printSignature bool) error {
-	return writeJSON(os.Stdout, locations, printChains, printPem, printExtensions, printSignature)
+func JSON(locations []cert.Location, opts Options) error {
+	return writeJSON(os.Stdout, locations, opts)
 }
 
-func writeJSON(w io.Writer, locations []cert.Location, printChains, printPem, printExtensions, printSignature bool) error {
+func writeJSON(w io.Writer, locations []cert.Location, opts Options) error {
 
 	out := jsonOutput{Locations: make([]jsonLocation, 0, len(locations))}
 	for _, location := range locations {
-		out.Locations = append(out.Locations, buildLocation(location, printChains, printPem, printExtensions, printSignature))
+		out.Locations = append(out.Locations, buildLocation(location, opts))
 	}
 
 	encoder := json.NewEncoder(w)
@@ -171,7 +173,7 @@ func writeJSON(w io.Writer, locations []cert.Location, printChains, printPem, pr
 	return encoder.Encode(out)
 }
 
-func buildLocation(location cert.Location, printChains, printPem, printExtensions, printSignature bool) jsonLocation {
+func buildLocation(location cert.Location, opts Options) jsonLocation {
 
 	out := jsonLocation{
 		Name:       location.Name(),
@@ -185,10 +187,10 @@ func buildLocation(location cert.Location, printChains, printPem, printExtension
 	}
 
 	for _, csr := range location.CSRs {
-		out.CSRs = append(out.CSRs, buildCSR(csr, printPem, printExtensions, printSignature))
+		out.CSRs = append(out.CSRs, buildCSR(csr, opts))
 	}
 	for _, certificate := range location.Certificates {
-		out.Certificates = append(out.Certificates, buildCertificate(certificate, printPem, printExtensions, printSignature))
+		out.Certificates = append(out.Certificates, buildCertificate(certificate, opts))
 	}
 
 	if location.Verification != nil {
@@ -201,7 +203,7 @@ func buildLocation(location cert.Location, printChains, printPem, printExtension
 		out.OCSPStaple = buildStaple(location)
 	}
 
-	if printChains && location.IsCertificate() {
+	if opts.Chains && location.IsCertificate() {
 		chains, err := location.Chains()
 		if err != nil {
 			out.ChainsError = err.Error()
@@ -209,7 +211,7 @@ func buildLocation(location cert.Location, printChains, printPem, printExtension
 		for _, chain := range chains {
 			built := make([]jsonCertificate, 0, len(chain))
 			for _, certificate := range chain {
-				built = append(built, buildCertificate(certificate, printPem, printExtensions, printSignature))
+				built = append(built, buildCertificate(certificate, opts))
 			}
 			out.Chains = append(out.Chains, built)
 		}
@@ -217,7 +219,7 @@ func buildLocation(location cert.Location, printChains, printPem, printExtension
 	return out
 }
 
-func buildCertificate(certificate cert.Certificate, printPem, printExtensions, printSignature bool) jsonCertificate {
+func buildCertificate(certificate cert.Certificate, opts Options) jsonCertificate {
 
 	out := jsonCertificate{Position: certificate.Position()}
 	if certificate.Error() != nil {
@@ -234,6 +236,10 @@ func buildCertificate(certificate cert.Certificate, printPem, printExtensions, p
 
 	out.Version = certificate.Version()
 	out.SerialNumber = certificate.SerialNumber()
+	// json is read by something rather than someone, and a consumer would not
+	// think to ask for these, so they are always here
+	out.Fingerprint = certificate.Fingerprint()
+	out.PublicKeyID = certificate.PublicKeyFingerprint()
 	out.SignatureAlgorithm = certificate.SignatureAlgorithm()
 	out.Type = certificate.Type()
 	out.Issuer = certificate.Issuer()
@@ -250,22 +256,22 @@ func buildCertificate(certificate cert.Certificate, printPem, printExtensions, p
 	out.ExtKeyUsage = certificate.ExtKeyUsage()
 	out.IsCA = &isCA
 
-	if printExtensions {
+	if opts.Extensions {
 		out.Extensions = buildExtensions(certificate.Extensions())
 	}
 	for _, warning := range certificate.Warnings() {
 		out.Warnings = append(out.Warnings, jsonWarning{Code: warning.Code, Message: warning.Message})
 	}
-	if printSignature {
+	if opts.Signature {
 		out.Signature = certificate.Signature()
 	}
-	if printPem {
+	if opts.Pem {
 		out.PEM = string(certificate.ToPEM())
 	}
 	return out
 }
 
-func buildCSR(csr cert.CSR, printPem, printExtensions, printSignature bool) jsonCSR {
+func buildCSR(csr cert.CSR, opts Options) jsonCSR {
 
 	var out jsonCSR
 	if csr.Error() != nil {
@@ -283,13 +289,13 @@ func buildCSR(csr cert.CSR, printPem, printExtensions, printSignature bool) json
 	out.EmailAddresses = csr.EmailAddresses()
 	out.URIs = csr.URIs()
 
-	if printExtensions {
+	if opts.Extensions {
 		out.Extensions = buildExtensions(csr.Extensions())
 	}
-	if printSignature {
+	if opts.Signature {
 		out.Signature = csr.Signature()
 	}
-	if printPem {
+	if opts.Pem {
 		out.PEM = string(csr.ToPEM())
 	}
 	return out

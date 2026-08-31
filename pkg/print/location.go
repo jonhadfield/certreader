@@ -8,18 +8,29 @@ import (
 	"time"
 )
 
-func printCertificates(certs cert.Certificates, printPem, printExtensions, printSignature bool) {
+// Options says what to print beyond the certificate itself. It replaced a row
+// of booleans at the call site: by the fifth, nobody could tell which was
+// which without counting.
+type Options struct {
+	Chains      bool
+	Pem         bool
+	Extensions  bool
+	Signature   bool
+	Fingerprint bool
+}
+
+func printCertificates(certs cert.Certificates, opts Options) {
 
 	for _, certificate := range certs {
-		printCertificate(certificate, printExtensions, printSignature)
+		printCertificate(certificate, opts)
 		fmt.Println()
-		if printPem {
+		if opts.Pem {
 			fmt.Println(string(certificate.ToPEM()))
 		}
 	}
 }
 
-func printCertificate(certificate cert.Certificate, printExtensions, printSignature bool) {
+func printCertificate(certificate cert.Certificate, opts Options) {
 
 	if certificate.Error() != nil {
 		slog.Error(certificate.Error().Error())
@@ -29,6 +40,10 @@ func printCertificate(certificate cert.Certificate, printExtensions, printSignat
 
 	fmt.Printf("%s: %d\n", AttributeName("Version"), certificate.Version())
 	fmt.Printf("%s: %s\n", AttributeName("Serial Number"), certificate.SerialNumber())
+	if opts.Fingerprint {
+		fmt.Printf("%s: %s\n", AttributeName("Fingerprint SHA-256"), certificate.Fingerprint())
+		fmt.Printf("%s: %s\n", AttributeName("Public Key SHA-256"), certificate.PublicKeyFingerprint())
+	}
 	fmt.Printf("%s: %s\n", AttributeName("Signature Algorithm"), certificate.SignatureAlgorithm())
 	fmt.Printf("%s: %s\n", AttributeName("Type"), certificate.Type())
 	fmt.Printf("%s: %s\n", AttributeName("Issuer"), certificate.Issuer())
@@ -53,7 +68,7 @@ func printCertificate(certificate cert.Certificate, printExtensions, printSignat
 		}
 	}
 
-	if printExtensions {
+	if opts.Extensions {
 		fmt.Printf("%s:\n", AttributeName("Extensions"))
 		for _, extension := range certificate.Extensions() {
 			name := fmt.Sprintf("%s (%s)", extension.Name, extension.Oid)
@@ -67,7 +82,7 @@ func printCertificate(certificate cert.Certificate, printExtensions, printSignat
 		}
 	}
 
-	if printSignature {
+	if opts.Signature {
 		fmt.Printf("%s: %s\n", AttributeName("Signature Algorithm"), certificate.SignatureAlgorithm())
 		fmt.Printf("%s\n", AttributeName("Signature Value"))
 		for _, line := range splitString(certificate.Signature(), "    ", 54) {
@@ -100,7 +115,7 @@ func splitString(in, prefix string, size int) []string {
 }
 
 // Locations prints locations with auto-detected content (certificates or CSRs)
-func Locations(locations []cert.Location, printChains, printPem, printExtensions, printSignature bool) {
+func Locations(locations []cert.Location, opts Options) {
 	for _, location := range locations {
 		if location.Error != nil {
 			slog.Error(fmt.Sprintf("%s: %v", location.Name(), location.Error))
@@ -113,13 +128,13 @@ func Locations(locations []cert.Location, printChains, printPem, printExtensions
 
 		// Print based on content type
 		if location.IsCSR() {
-			printCSRs(location.CSRs, printPem, printExtensions, printSignature)
+			printCSRs(location.CSRs, opts.Pem, opts.Extensions, opts.Signature)
 		} else if location.IsCertificate() {
-			printCertificates(location.Certificates, printPem, printExtensions, printSignature)
+			printCertificates(location.Certificates, opts)
 			printVerification(location)
 			printRevocation(location)
 
-			if printChains {
+			if opts.Chains {
 				chains, err := location.Chains()
 				if err != nil {
 					slog.Error(fmt.Sprintf("chains for %s: %v", location.Name(), err))
@@ -134,7 +149,7 @@ func Locations(locations []cert.Location, printChains, printPem, printExtensions
 				}
 				for i, chain := range chains {
 					fmt.Printf(" -- [chain %d] -- \n", i+1)
-					printCertificates(chain, printPem, printExtensions, printSignature)
+					printCertificates(chain, opts)
 				}
 			}
 		}

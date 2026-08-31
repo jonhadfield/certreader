@@ -73,7 +73,7 @@ func main() {
 
 	switch {
 	case flags.JSON:
-		if err := print.JSON(locations, flags.Chains, flags.Pem, flags.Extensions, flags.Signature); err != nil {
+		if err := print.JSON(locations, printOptions(flags)); err != nil {
 			slog.Error(fmt.Sprintf("writing json: %v", err))
 			os.Exit(exitLoadError)
 		}
@@ -82,7 +82,7 @@ func main() {
 	case flags.PemOnly:
 		print.Pem(locations, flags.Chains)
 	default:
-		print.Locations(locations, flags.Chains, flags.Pem, flags.Extensions, flags.Signature)
+		print.Locations(locations, printOptions(flags))
 	}
 
 	os.Exit(exitStatus(locations, flags))
@@ -104,6 +104,17 @@ func setLogger(verbose bool) {
 		level = slog.LevelDebug
 	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})))
+}
+
+// printOptions is what the flags say to print beyond the certificate itself.
+func printOptions(flags Flags) print.Options {
+	return print.Options{
+		Chains:      flags.Chains,
+		Pem:         flags.Pem,
+		Extensions:  flags.Extensions,
+		Signature:   flags.Signature,
+		Fingerprint: flags.Fingerprint,
+	}
 }
 
 func LoadLocations(flags Flags) cert.Locations {

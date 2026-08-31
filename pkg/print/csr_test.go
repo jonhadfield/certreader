@@ -76,7 +76,7 @@ func TestLocationsPrintsCSRs(t *testing.T) {
 		CSRs:        loadTestCSRs(t, "csr.pem"),
 	}}
 
-	output := captureStdout(t, func() { Locations(locations, false, false, false, false) })
+	output := captureStdout(t, func() { Locations(locations, Options{}) })
 
 	assert.Contains(t, output, "request.csr")
 	assert.Contains(t, output, "test.example.com")
