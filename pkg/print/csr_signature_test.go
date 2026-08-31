@@ -70,3 +70,26 @@ func TestJSONCarriesCSRSelfSignature(t *testing.T) {
 		assert.Equal(t, "invalid-self-signature", warnings[0].(map[string]any)["code"])
 	})
 }
+
+func TestPrintCSRVersion(t *testing.T) {
+	t.Run("given a request, then the version reads as the number and the encoding", func(t *testing.T) {
+		// what openssl prints for the same file, so a reader cross-checking
+		// against it sees the same thing
+		output := captureStdout(t, func() { Locations(csrFixture(t, "csr_san.pem"), Options{}) })
+
+		assert.Contains(t, output, "Version: 1 (0x0)")
+		assert.NotContains(t, output, "Version: 0")
+	})
+
+	t.Run("given a request, then json reports the version a certificate would", func(t *testing.T) {
+		var out strings.Builder
+		require.NoError(t, writeJSON(&out, csrFixture(t, "csr_san.pem"), Options{}))
+
+		var document map[string]any
+		require.NoError(t, json.Unmarshal([]byte(out.String()), &document))
+
+		locations := document["locations"].([]any)
+		csr := locations[0].(map[string]any)["csrs"].([]any)[0].(map[string]any)
+		assert.Equal(t, float64(1), csr["version"])
+	})
+}

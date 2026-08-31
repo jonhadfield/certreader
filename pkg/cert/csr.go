@@ -159,8 +159,19 @@ func (c CSR) URIs() []string {
 	return uris
 }
 
+// Version is the version as it is encoded, which PKCS#10 numbers from zero: a
+// v1 request encodes as 0. It is the raw field, kept for anything that needs
+// the encoding rather than the number.
 func (c CSR) Version() int {
 	return c.x509CSR.Version
+}
+
+// VersionNumber is the version people write, counting from one, which is what
+// a certificate's Version already reports. Printing the encoded value under
+// the same label as a certificate's meant a request looked like version 0 next
+// to a certificate's 3, when both are the current version of their format.
+func (c CSR) VersionNumber() int {
+	return c.x509CSR.Version + 1
 }
 
 func (c CSR) SignatureAlgorithm() string {
