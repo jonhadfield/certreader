@@ -4,11 +4,16 @@ A fork of the excellent [certinfo](https://github.com/pete911/certinfo), adding:
 
 - **revocation checking** — the OCSP response a server staples to the handshake, and with
   `-revocation` a live check against the certificate's OCSP responders, falling back to its CRLs
+- **`-verify`**, which says *why* a chain fails rather than only that it did, and reports what a
+  server sends that it should not: a missing intermediate, a root it need not serve, duplicates,
+  certificates out of order
+- **warnings** on weak signatures, small keys and over-long validity
 - **json output** (`-json`) and **exit codes**, so it can be used as a monitoring check rather than
   only read by a person
 - **PKCS#12/PFX** and **DER** input alongside PEM, and **CSR** reading
-- clipboard input, colourised output, and bare hostnames (`certreader example.com`) defaulting to
-  port 443
+- **starttls** for smtp, imap, pop3, ftp, nntp, ldap and postgres
+- clipboard input, colourised output, IPv6 addresses, and bare hostnames
+  (`certreader example.com`) defaulting to port 443
 
 [![go](https://github.com/jonhadfield/certreader/actions/workflows/go.yml/badge.svg)](https://github.com/jonhadfield/certreader/actions/workflows/go.yml)
 [![release](https://img.shields.io/github/v/release/jonhadfield/certreader)](https://github.com/jonhadfield/certreader/releases/latest)
@@ -36,6 +41,7 @@ certreader [flags] [<file>|<host:port> ...]
 | -chains       | whether to print verified chains as well                                                          |
 | -concurrency  | how many locations to read at once, 0 for no limit (default 100)                                  |
 | -clipboard    | read input from clipboard (only if the clipboard is supported)                                    |
+| -csr          | force CSR mode (CSRs are auto-detected, so this is optional)                                      |
 | -expiry       | print expiry of certificates                                                                      |
 | -expiring-within | exit non-zero if any certificate expires within this window, e.g. 30d, 2w, 72h                  |
 | -fail-on-warning | exit non-zero if any certificate or chain warning is reported                                   |
@@ -54,6 +60,7 @@ certreader [flags] [<file>|<host:port> ...]
 | -starttls     | upgrade a plaintext connection to tls: smtp, imap, pop3, ftp, nntp, ldap, postgres                |
 | -sort-expiry  | sort certificates by expiration date                                                              |
 | -subject-like | print certificates with subject field containing supplied string                                  |
+| -verbose      | verbose logging, to stderr                                                                        |
 | -verify       | verify against the system trust store and report why it fails                                     |
 | -timeout      | how long to wait for a connection, and proportionally longer for revocation requests (default 5s)  |
 | -more         | use a combination of the '-pem -signature -chains' flags                                          |
@@ -421,10 +428,10 @@ targets and the configs in `.goreleaser/`, building darwin on the host and linux
 
 ### remove expired and malformed certs
 
-- `--pem-only` flag returns only pem blocks that can be parsed and are type of certificate
-- `--no-expired` flag removes expired certificates
+- `-pem-only` returns only the pem blocks that parse and are certificates
+- `-no-expired` removes expired certificates
 
-`certreader --pem-only --no-expired <chain-file>.pem > <new-chain-file>.pem`
+`certreader -pem-only -no-expired <chain-file>.pem > <new-chain-file>.pem`
 
 ### certificate transparency
 
@@ -448,70 +455,78 @@ names needs a list that goes stale.
 
 ### info/verbose
 
-`certreader vault.com:443`
+`certreader www.digicert.com:443`
 ```
---- [vault.com:443 TLS 1.2] ---
+--- [www.digicert.com:443 TLS 1.3] ---
 Version: 3
-Serial Number: 16280914906313700456
+Serial Number: 08:06:62:87:89:15:B4:2A:0E:4D:C6:1A:4D:AE:DF:EA
 Signature Algorithm: SHA256-RSA
 Type: end-entity
-Issuer: CN=Go Daddy Secure Certificate Authority - G2,OU=http://certs.godaddy.com/repository/,O=GoDaddy.com\, Inc.,L=Scottsdale,ST=Arizona,C=US
+Issuer: CN=DigiCert EV RSA CA G2,O=DigiCert Inc,C=US
 Validity
-    Not Before: Mar 24 10:44:12 2022 UTC
-    Not After : Mar 19 13:04:10 2023 UTC
-Subject: CN=*.vault.com
-DNS Names: *.vault.com, vault.com
-IP Addresses:
-Authority Key Id: 40c2bd278ecc348330a233d7fb6cb3f0b42c80ce
+    Not Before: Aug 10 00:00:00 2026 UTC
+    Not After: Sep 25 23:59:59 2026 UTC
+Subject: CN=www.digicert.com,O=DigiCert\, Inc.,L=Lehi,ST=Utah,C=US,SERIALNUMBER=5299537-0142,2.5.4.15=#131450726976617465204f7267616e697a6174696f6e,1.3.6.1.4.1.311.60.2.1.2=#130455746168,1.3.6.1.4.1.311.60.2.1.3=#13025553
+DNS Names: www.digicert.com, digicert.com
+IP Addresses: 
+Authority Key Id: 6A:4E:50:BF:98:68:9D:5B:7B:20:75:D4:59:01:79:48:66:92:32:06
 Subject Key
-    Id       : 6b8c8d1da18cbb8cd64437ed0a9c8a0fef673821
+    Id: C8:55:B6:D1:45:24:87:58:39:F8:14:0A:64:CE:11:B7:C1:FC:72:69
     Algorithm: RSA
 Key Usage: Digital Signature, Key Encipherment
-Ext Key Usage: Server Auth, Client Auth
+Ext Key Usage: Server Auth
 CA: false
 
 Version: 3
-Serial Number: 7
+Serial Number: 01:67:8F:1F:EF:88:22:55:D8:B0:A7:0E:6B:7B:B2:20
 Signature Algorithm: SHA256-RSA
 Type: intermediate
-Issuer: CN=Go Daddy Root Certificate Authority - G2,O=GoDaddy.com\, Inc.,L=Scottsdale,ST=Arizona,C=US
+Issuer: CN=DigiCert Global Root G2,OU=www.digicert.com,O=DigiCert Inc,C=US
 Validity
-    Not Before: May  3 07:00:00 2011 UTC
-    Not After : May  3 07:00:00 2031 UTC
-Subject: CN=Go Daddy Secure Certificate Authority - G2,OU=http://certs.godaddy.com/repository/,O=GoDaddy.com\, Inc.,L=Scottsdale,ST=Arizona,C=US
-DNS Names:
-IP Addresses:
-Authority Key Id: 3a9a8507106728b6eff6bd05416e20c194da0fde
+    Not Before: Jul  2 12:42:50 2020 UTC
+    Not After: Jul  2 12:42:50 2030 UTC
+Subject: CN=DigiCert EV RSA CA G2,O=DigiCert Inc,C=US
+DNS Names: 
+IP Addresses: 
+Authority Key Id: 4E:22:54:20:18:95:E6:E3:6E:E6:0F:FA:FA:B9:12:ED:06:17:8F:39
 Subject Key
-    Id       : 40c2bd278ecc348330a233d7fb6cb3f0b42c80ce
+    Id: 6A:4E:50:BF:98:68:9D:5B:7B:20:75:D4:59:01:79:48:66:92:32:06
     Algorithm: RSA
-Key Usage: Cert Sign, CRL Sign
-Ext Key Usage:
+Key Usage: Digital Signature, Cert Sign, CRL Sign
+Ext Key Usage: Server Auth, Client Auth
 CA: true
 
 Version: 3
-Serial Number: 1828629
+Serial Number: 03:3A:F1:E6:A7:11:A9:A0:BB:28:64:B1:1D:09:FA:E5
 Signature Algorithm: SHA256-RSA
-Type: intermediate
-Issuer: OU=Go Daddy Class 2 Certification Authority,O=The Go Daddy Group\, Inc.,C=US
+Type: root
+Issuer: CN=DigiCert Global Root G2,OU=www.digicert.com,O=DigiCert Inc,C=US
 Validity
-    Not Before: Jan  1 07:00:00 2014 UTC
-    Not After : May 30 07:00:00 2031 UTC
-Subject: CN=Go Daddy Root Certificate Authority - G2,O=GoDaddy.com\, Inc.,L=Scottsdale,ST=Arizona,C=US
-DNS Names:
-IP Addresses:
-Authority Key Id: d2c4b0d291d44c1171b361cb3da1fedda86ad4e3
+    Not Before: Aug  1 12:00:00 2013 UTC
+    Not After: Jan 15 12:00:00 2038 UTC
+Subject: CN=DigiCert Global Root G2,OU=www.digicert.com,O=DigiCert Inc,C=US
+DNS Names: 
+IP Addresses: 
+Authority Key Id: 
 Subject Key
-    Id       : 3a9a8507106728b6eff6bd05416e20c194da0fde
+    Id: 4E:22:54:20:18:95:E6:E3:6E:E6:0F:FA:FA:B9:12:ED:06:17:8F:39
     Algorithm: RSA
-Key Usage: Cert Sign, CRL Sign
-Ext Key Usage:
+Key Usage: Digital Signature, Cert Sign, CRL Sign
+Ext Key Usage: 
 CA: true
 
---- 1 verified chains ---
+OCSP Staple
+    Status: good
+    Serial Number: 08:06:62:87:89:15:B4:2A:0E:4D:C6:1A:4D:AE:DF:EA
+    Produced At: Aug 30 11:13:27 2026 UTC
+    This Update: Aug 30 10:57:00 2026 UTC
+    Next Update: Sep  6 09:57:00 2026 UTC
+    Signature: verified against issuer
 ```
 
 ### expiry
+
+`certreader -expiry www.digicert.com`
 
 Each line names the certificate it refers to, since every line in a chain shares the same prefix:
 
@@ -521,25 +536,13 @@ www.digicert.com TLS 1.3: Jul  2 12:42:50 2030 UTC  DigiCert EV RSA CA G2
 www.digicert.com TLS 1.3: Jan 15 12:00:00 2038 UTC  DigiCert Global Root G2
 ```
 
-### info/expiry
-
-`certreader -expiry google.com:443`
-```
---- [google.com:443 TLS 1.3] ---
-Subject: CN=*.google.com
-Expiry: 2 months 4 days 14 hours 41 minutes
-
-Subject: CN=GTS CA 1C3,O=Google Trust Services LLC,C=US
-Expiry: 4 years 6 months 19 days 5 hours 29 minutes
-
-Subject: CN=GTS Root R1,O=Google Trust Services LLC,C=US
-Expiry: 4 years 10 months 17 days 4 hours 29 minutes
-```
-
 ### show certificate with specific subject
 This example shows AWS RDS certificates for specific region (we can also see AWS started using 100 years expiration)
-- show only eu-west-2 certs `curl https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem | certreader -issuer-like eu-west-2`
-- download only eu-west-2 certs `curl https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem | certreader -issuer-like eu-west-2 -pem-only > rds-eu-west-2.pem`
+- show only eu-west-2 certs `curl https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem | certreader -subject-like eu-west-2`
+- download only eu-west-2 certs `curl https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem | certreader -subject-like eu-west-2 -pem-only > rds-eu-west-2.pem`
+
+  These entries are self-signed roots, so `-issuer-like` returns the same three certificates. The two
+  differ on a chain, where the subject is the certificate and the issuer is what signed it.
 
 ### verify SNI certificates
 Specific host can be set by `server-name` flag. This is useful if we need to verify that load balancer is correctly
