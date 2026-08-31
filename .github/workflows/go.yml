@@ -38,6 +38,11 @@ jobs:
       -
         name: go vet
         run: go vet ./...
+      -
+        name: lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.13.2
   scan:
     runs-on: ubuntu-latest
     steps:

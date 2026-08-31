@@ -57,6 +57,7 @@ func (l Location) TLSVersionName() string {
 	switch l.TLSVersion {
 	case 0:
 		return ""
+	//nolint:staticcheck // deprecated, but a server may still offer it and the point is to say so
 	case tls.VersionSSL30:
 		return "SSL 3.0"
 	case tls.VersionTLS10:
@@ -309,12 +310,12 @@ func dialStartTLS(addr string, config *tls.Config, protocol StartTLSProtocol, ti
 	// one budget for the negotiation and the handshake, so a server that
 	// answers slowly cannot hang the whole run
 	if err := raw.SetDeadline(time.Now().Add(timeout)); err != nil {
-		raw.Close()
+		_ = raw.Close()
 		return nil, err
 	}
 
 	if err := negotiateStartTLS(raw, protocol); err != nil {
-		raw.Close()
+		_ = raw.Close()
 		return nil, err
 	}
 
@@ -328,11 +329,11 @@ func dialStartTLS(addr string, config *tls.Config, protocol StartTLSProtocol, ti
 
 	conn := tls.Client(raw, config)
 	if err := conn.Handshake(); err != nil {
-		raw.Close()
+		_ = raw.Close()
 		return nil, err
 	}
 	if err := raw.SetDeadline(time.Time{}); err != nil {
-		raw.Close()
+		_ = raw.Close()
 		return nil, err
 	}
 	return conn, nil
@@ -447,6 +448,7 @@ func tlsFormat(tlsVersion uint16) string {
 	switch tlsVersion {
 	case 0:
 		return ""
+	//nolint:staticcheck // deprecated, but a server may still offer it and the point is to say so
 	case tls.VersionSSL30:
 		return "SSLv3 - Deprecated!"
 	case tls.VersionTLS10:

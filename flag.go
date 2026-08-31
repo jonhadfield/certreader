@@ -123,7 +123,9 @@ func ParseFlags() (Flags, error) {
 	flagSet.BoolVar(&flags.More, "more", getBoolEnv("CERTREADER_MORE", false), "combination of '-pem -signature -chains'")
 
 	flagSet.Usage = func() {
-		fmt.Fprint(flagSet.Output(), "Usage: certreader [flags] [<file>|<host:port> ...]\n")
+		// usage goes wherever the flag package is writing; a failed write there
+		// is nothing this can do anything about
+		_, _ = fmt.Fprint(flagSet.Output(), "Usage: certreader [flags] [<file>|<host:port> ...]\n")
 		flagSet.PrintDefaults()
 	}
 	flags.Usage = flagSet.Usage
