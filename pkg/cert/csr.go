@@ -110,10 +110,10 @@ func (c CSR) SubjectString() string {
 // request.
 func (c CSR) Error() error {
 	if c.err != nil {
-		return fmt.Errorf("ERROR: block at position %d: %v", c.position, c.err)
+		return fmt.Errorf("ERROR: block at position %d: %w", c.position, c.err)
 	}
 	if c.x509CSR == nil {
-		return fmt.Errorf("ERROR: block at position %d: %v", c.position, errNoCertificateReq)
+		return fmt.Errorf("ERROR: block at position %d: %w", c.position, errNoCertificateReq)
 	}
 	return nil
 }
@@ -128,7 +128,7 @@ func (c CSR) DNSNames() []string {
 func (c CSR) IPAddresses() []string {
 	var ips []string
 	for _, ip := range c.x509CSR.IPAddresses {
-		ips = append(ips, fmt.Sprintf("%s", ip))
+		ips = append(ips, ip.String())
 	}
 	return ips
 }

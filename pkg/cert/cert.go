@@ -1,3 +1,7 @@
+// Package cert reads certificates, certificate requests and the chains a
+// server presents, from files, network addresses and stdin, and reports what
+// they say: how they are put together, whether they verify, whether they have
+// been revoked, and what about them is worth drawing attention to.
 package cert
 
 import (
@@ -383,10 +387,10 @@ func (c Certificate) SubjectString() string {
 // to report one here rather than panic later.
 func (c Certificate) Error() error {
 	if c.err != nil {
-		return fmt.Errorf("ERROR: block at position %d: %v", c.position, c.err)
+		return fmt.Errorf("ERROR: block at position %d: %w", c.position, c.err)
 	}
 	if c.x509Certificate == nil {
-		return fmt.Errorf("ERROR: block at position %d: %v", c.position, errNoCertificate)
+		return fmt.Errorf("ERROR: block at position %d: %w", c.position, errNoCertificate)
 	}
 	return nil
 }
@@ -403,7 +407,7 @@ func (c Certificate) DNSNames() []string {
 func (c Certificate) IPAddresses() []string {
 	var ips []string
 	for _, ip := range c.x509Certificate.IPAddresses {
-		ips = append(ips, fmt.Sprintf("%s", ip))
+		ips = append(ips, ip.String())
 	}
 	return ips
 }

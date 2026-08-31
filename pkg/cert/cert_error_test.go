@@ -274,3 +274,29 @@ func TestCertificate_Methods(t *testing.T) {
 		}
 	})
 }
+
+func TestErrorWrapsItsSentinel(t *testing.T) {
+	// Error is built with fmt.Errorf, and used %v, so the sentinel inside it
+	// could not be reached. Everywhere else in the package wraps with %w and
+	// eleven places call errors.Is or errors.As.
+	t.Run("given a certificate holding neither a certificate nor an error", func(t *testing.T) {
+		err := Certificate{position: 1}.Error()
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, errNoCertificate)
+	})
+
+	t.Run("given a request holding neither", func(t *testing.T) {
+		err := CSR{position: 1}.Error()
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, errNoCertificateReq)
+	})
+
+	t.Run("given a block that failed to parse, then the parse error is reachable", func(t *testing.T) {
+		err := Certificate{position: 2, err: errNoPEMBlock}.Error()
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, errNoPEMBlock)
+	})
+}

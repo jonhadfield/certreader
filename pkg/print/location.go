@@ -1,3 +1,5 @@
+// Package print renders what pkg/cert reads: as text for a person, as json for
+// something acting on it, and as pem for something else to read in turn.
 package print
 
 import (

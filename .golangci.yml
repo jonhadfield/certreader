@@ -1,0 +1,18 @@
+# The default linters, plus the checks that would have caught faults this
+# codebase has actually had. Run with `make lint`, and on every push.
+version: "2"
+
+linters:
+  default: standard
+  exclusions:
+    rules:
+      # Tests write to pipes and sockets they have just created and assert on
+      # what comes back. A failed write shows up as a failed assertion, which
+      # is a better error than a checked one would be.
+      - path: _test\.go
+        linters:
+          - errcheck
+
+formatters:
+  enable:
+    - gofmt

@@ -8,6 +8,12 @@ test:
 	go clean -testcache && go test -cover ./...
 .PHONY:test
 
+# golangci-lint is not part of `test`, since it is not always installed. CI runs
+# it on every push.
+lint:
+	golangci-lint run ./...
+.PHONY:lint
+
 # the fixtures are only the cases somebody thought to write down; this puts the
 # same questions to every certificate in the machine's trust store
 corpus:

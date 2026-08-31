@@ -405,7 +405,7 @@ func (c *RevocationChecker) do(request *http.Request) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 
 	if response.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected response status %s", response.Status)

@@ -1,3 +1,5 @@
+// Command certreader prints information about TLS certificates read from
+// files, network addresses, the clipboard or stdin.
 package main
 
 import (
