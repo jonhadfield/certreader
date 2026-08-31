@@ -8,6 +8,12 @@ test:
 	go clean -testcache && go test -cover ./...
 .PHONY:test
 
+# the fixtures are only the cases somebody thought to write down; this puts the
+# same questions to every certificate in the machine's trust store
+corpus:
+	./scripts/corpus-check.sh
+.PHONY:corpus
+
 build: test
 	go build -ldflags "-X main.Version=${VERSION}" -mod vendor
 .PHONY:build
