@@ -214,3 +214,39 @@ func threeTierChain(t *testing.T, commonName string) (leaf, intermediate, root *
 
 	return leaf, intermediate, root
 }
+
+func TestMissingIntermediateWarning(t *testing.T) {
+	leaf, intermediate, root := threeTierChain(t, "missing.example.com")
+
+	t.Run("given a server that sends its intermediate, then nothing is reported", func(t *testing.T) {
+		warnings := servedChain(leaf, intermediate).ChainWarnings()
+
+		assert.NotContains(t, chainWarningCodes(warnings), VerifyMissingIntermediate)
+	})
+
+	t.Run("given a server that sends only the leaf, then it is reported", func(t *testing.T) {
+		// The fault that breaks clients and hides on the machine it was tested
+		// from: macOS and Windows keep intermediates they have seen, so the
+		// chain verifies there and fails elsewhere.
+		warnings := servedChain(leaf).ChainWarnings()
+
+		require.Contains(t, chainWarningCodes(warnings), VerifyMissingIntermediate)
+		assert.Contains(t, messages(warnings)[0], "chain test intermediate is not sent")
+		assert.Contains(t, messages(warnings)[0], "missing.example.com")
+	})
+
+	t.Run("given a self-signed certificate, then it is not reported as missing an issuer", func(t *testing.T) {
+		// It has no issuer to send. Verification says so on its own.
+		warnings := servedChain(root).ChainWarnings()
+
+		assert.NotContains(t, chainWarningCodes(warnings), VerifyMissingIntermediate)
+	})
+
+	t.Run("given a file rather than a server, then nothing is reported", func(t *testing.T) {
+		// A file holds whatever it holds; only what a server sends is judged.
+		location := Location{Path: "chain.pem", ContentType: ContentTypeCertificate,
+			Certificates: FromX509Certificates([]*x509.Certificate{leaf})}
+
+		assert.Empty(t, location.ChainWarnings())
+	})
+}

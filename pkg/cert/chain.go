@@ -13,6 +13,9 @@ const (
 	ChainWarningDuplicate    = "duplicate-certificate"
 	ChainWarningOutOfOrder   = "chain-out-of-order"
 	ChainWarningNoLeafFirst  = "leaf-not-first"
+	// A missing intermediate is reported under the same code whether it is
+	// found here or by verification, since it is the same fault either way.
+	ChainWarningNoIssuer = VerifyMissingIntermediate
 )
 
 // ChainWarnings reports how the served chain is put together. These are not
@@ -42,7 +45,53 @@ func (l Location) ChainWarnings() []Warning {
 	out = append(out, duplicateWarnings(presented)...)
 	out = append(out, rootWarnings(presented)...)
 	out = append(out, orderWarnings(presented)...)
+	out = append(out, missingIntermediateWarnings(presented)...)
 	return out
+}
+
+// missingIntermediateWarnings reports a server that does not send the
+// certificate that issued its own.
+//
+// This is the misconfiguration that breaks clients, and the one hardest to
+// notice: macOS and Windows keep intermediates they have seen before and fill
+// the gap themselves, so the chain verifies on the machine it was tested from
+// and fails for anyone whose store happens not to hold it. Verification cannot
+// report this, because on such a machine there is nothing to report: this
+// checks what the server sent rather than what this computer can make of it.
+//
+// A single-tier private CA that issues its leaves directly is warned about too.
+// Whether that matters cannot be told from here without knowing what the client
+// trusts, and the sentence is true either way: the issuer was not sent.
+func missingIntermediateWarnings(presented []*x509.Certificate) []Warning {
+
+	leaf := presented[0]
+	if isCertificateAuthority(leaf) {
+		return nil // already reported as not leaf first
+	}
+	if bytes.Equal(leaf.RawIssuer, leaf.RawSubject) {
+		return nil // self-signed, which verification reports on its own
+	}
+
+	for _, candidate := range presented[1:] {
+		if bytes.Equal(candidate.RawSubject, leaf.RawIssuer) {
+			return nil
+		}
+	}
+
+	return []Warning{{
+		Code: VerifyMissingIntermediate,
+		Message: fmt.Sprintf("%s is not sent, so a client that does not already hold it cannot build the chain for %s",
+			issuerName(leaf), nameOrSubject(leaf)),
+	}}
+}
+
+// issuerName names the certificate that signed this one, as briefly as it can
+// be told apart.
+func issuerName(certificate *x509.Certificate) string {
+	if certificate.Issuer.CommonName != "" {
+		return certificate.Issuer.CommonName
+	}
+	return certificate.Issuer.String()
 }
 
 // duplicateWarnings reports a certificate sent more than once, which is wasted
