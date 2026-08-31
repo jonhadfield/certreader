@@ -113,6 +113,18 @@ func ftpExchange(_ *testing.T, conn net.Conn) bool {
 	return true
 }
 
+// ftpBannerExchange greets the way RFC 959 allows and public servers do: the
+// middle line carries no code at all. test.rebex.net sends exactly this shape.
+func ftpBannerExchange(_ *testing.T, conn net.Conn) bool {
+	r := bufio.NewReader(conn)
+	io.WriteString(conn, "220-Welcome to test.example.net!\r\n")
+	io.WriteString(conn, "    See https://example.net/ for terms of use.\r\n")
+	io.WriteString(conn, "220 Log in as anonymous.\r\n")
+	r.ReadString('\n')
+	io.WriteString(conn, "234 proceed with negotiation\r\n")
+	return true
+}
+
 func nntpExchange(_ *testing.T, conn net.Conn) bool {
 	r := bufio.NewReader(conn)
 	io.WriteString(conn, "200 test NNTP ready\r\n")
@@ -145,20 +157,22 @@ func ldapExchange(_ *testing.T, conn net.Conn) bool {
 func TestLoadFromNetworkStartTLS(t *testing.T) {
 
 	tests := []struct {
+		name     string
 		protocol StartTLSProtocol
 		exchange func(*testing.T, net.Conn) bool
 	}{
-		{StartTLSSMTP, smtpExchange},
-		{StartTLSIMAP, imapExchange},
-		{StartTLSPOP3, pop3Exchange},
-		{StartTLSFTP, ftpExchange},
-		{StartTLSNNTP, nntpExchange},
-		{StartTLSPostgres, postgresExchange},
-		{StartTLSLDAP, ldapExchange},
+		{"smtp", StartTLSSMTP, smtpExchange},
+		{"imap", StartTLSIMAP, imapExchange},
+		{"pop3", StartTLSPOP3, pop3Exchange},
+		{"ftp", StartTLSFTP, ftpExchange},
+		{"ftp with a banner that does not repeat the code", StartTLSFTP, ftpBannerExchange},
+		{"nntp", StartTLSNNTP, nntpExchange},
+		{"postgres", StartTLSPostgres, postgresExchange},
+		{"ldap", StartTLSLDAP, ldapExchange},
 	}
 
 	for _, test := range tests {
-		t.Run(string(test.protocol)+" negotiates and retrieves the certificate", func(t *testing.T) {
+		t.Run(test.name+" negotiates and retrieves the certificate", func(t *testing.T) {
 			addr := startPlaintextServer(t, test.exchange)
 
 			// self signed, so verification is skipped; the point is the upgrade
@@ -369,5 +383,51 @@ func TestNetworkOptionsTimeout(t *testing.T) {
 
 		require.Error(t, location.Error)
 		assert.Less(t, elapsed, 3*time.Second, "the configured timeout must bound the wait")
+	})
+}
+
+func Test_readCodeReply(t *testing.T) {
+	read := func(reply string) (string, error) {
+		return readCodeReply(bufio.NewReader(strings.NewReader(reply)))
+	}
+
+	t.Run("given one line then that is the reply", func(t *testing.T) {
+		line, err := read("220 test FTP ready\r\n")
+		require.NoError(t, err)
+		assert.Equal(t, "220 test FTP ready", line)
+	})
+
+	t.Run("given a continuation that repeats the code then the last line is the reply", func(t *testing.T) {
+		// how smtp does it, and every line can be matched on
+		line, err := read("250-SIZE\r\n250-8BITMIME\r\n250 STARTTLS\r\n")
+		require.NoError(t, err)
+		assert.Equal(t, "250 STARTTLS", line)
+	})
+
+	t.Run("given a continuation that does not repeat the code then it is still read to the end", func(t *testing.T) {
+		// RFC 959 asks only that a middle line does not begin with three
+		// digits. Stopping at the first line without a hyphen returned the
+		// prose, and a banner was enough to abandon the connection.
+		line, err := read("220-Welcome!\r\n    See https://example.net/ for terms.\r\n220 Log in as anonymous.\r\n")
+		require.NoError(t, err)
+		assert.Equal(t, "220 Log in as anonymous.", line)
+	})
+
+	t.Run("given a final line that is the code alone then it ends the reply", func(t *testing.T) {
+		line, err := read("220-Welcome!\r\n    terms\r\n220\r\n")
+		require.NoError(t, err)
+		assert.Equal(t, "220", line)
+	})
+
+	t.Run("given a middle line that starts with another code then it is not the end", func(t *testing.T) {
+		// the terminator has to carry the code the reply opened with
+		line, err := read("220-Welcome!\r\n331 not the end\r\n220 done\r\n")
+		require.NoError(t, err)
+		assert.Equal(t, "220 done", line)
+	})
+
+	t.Run("given a reply that never ends then the read fails rather than returning prose", func(t *testing.T) {
+		_, err := read("220-Welcome!\r\n    and nothing more\r\n")
+		require.Error(t, err)
 	})
 }
