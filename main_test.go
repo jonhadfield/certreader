@@ -7,9 +7,12 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"io"
+	"log/slog"
 	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -339,4 +342,60 @@ func createTestCertificatePEM(t *testing.T, commonName string) []byte {
 	require.NoError(t, err)
 
 	return buf.Bytes()
+}
+
+func TestReportLoadFailures(t *testing.T) {
+	// The reading packages return their errors and the printers put them in the
+	// document. This is the one place they are announced, and it exists for the
+	// run whose output goes to a file: certreader -pem-only host > chain.pem
+	// would otherwise say nothing about the half that failed.
+	capture := func(t *testing.T, locations cert.Locations) string {
+		t.Helper()
+
+		reader, writer, err := os.Pipe()
+		require.NoError(t, err)
+
+		original := slog.Default()
+		slog.SetDefault(slog.New(slog.NewTextHandler(writer, &slog.HandlerOptions{Level: slog.LevelError})))
+		t.Cleanup(func() { slog.SetDefault(original) })
+
+		reportLoadFailures(locations)
+		require.NoError(t, writer.Close())
+
+		logged, err := io.ReadAll(reader)
+		require.NoError(t, err)
+		return string(logged)
+	}
+
+	t.Run("given a location that could not be read, then it is named once", func(t *testing.T) {
+		logged := capture(t, cert.Locations{cert.LoadFromFile("testdata/does-not-exist.pem", "")})
+
+		assert.Equal(t, 1, strings.Count(logged, "level=ERROR"))
+		assert.Contains(t, logged, "cannot read location")
+		assert.Contains(t, logged, "does-not-exist.pem")
+	})
+
+	t.Run("given a readable file holding a block that is not, then the block is named", func(t *testing.T) {
+		// The file loads; one block inside it does not. Reporting only the
+		// location would say nothing at all here.
+		raw, err := os.ReadFile("pkg/cert/testdata/cert.pem")
+		require.NoError(t, err)
+		mixed := append(append(raw, '\n'), []byte("-----BEGIN CERTIFICATE-----\nbm90IGEgY2VydGlmaWNhdGU=\n-----END CERTIFICATE-----\n")...)
+
+		certificates, err := cert.FromBytes(mixed, "")
+		require.NoError(t, err)
+		require.Len(t, certificates, 2)
+
+		logged := capture(t, cert.Locations{{Path: "mixed.pem", ContentType: cert.ContentTypeCertificate, Certificates: certificates}})
+
+		assert.Equal(t, 1, strings.Count(logged, "level=ERROR"))
+		assert.Contains(t, logged, "cannot read certificate")
+		assert.Contains(t, logged, "mixed.pem")
+	})
+
+	t.Run("given everything read, then nothing is said", func(t *testing.T) {
+		logged := capture(t, cert.Locations{cert.LoadFromFile("pkg/cert/testdata/cert.pem", "")})
+
+		assert.Empty(t, logged)
+	})
 }

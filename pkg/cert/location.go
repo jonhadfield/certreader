@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"golang.design/x/clipboard"
 	"io"
-	"log/slog"
 	"net"
 	"os"
 	"slices"
@@ -281,7 +280,6 @@ func LoadFromNetwork(addr string, opts NetworkOptions) Location {
 		conn, err = dialStartTLS(addr, config, opts.StartTLS, opts.timeout())
 	}
 	if err != nil {
-		slog.Error(fmt.Sprintf("load certificate from network %s: %v", addr, err.Error()))
 		return Location{Path: addr, Error: err}
 	}
 
@@ -343,7 +341,6 @@ func dialStartTLS(addr string, config *tls.Config, protocol StartTLSProtocol, ti
 func LoadFromFile(fileName string, password string) Location {
 	b, err := os.ReadFile(fileName)
 	if err != nil {
-		slog.Error(fmt.Sprintf("load from file %s: %v", fileName, err.Error()))
 		return Location{Path: fileName, Error: err}
 	}
 	return loadContent(fileName, b, password)
@@ -353,7 +350,6 @@ func LoadFromFile(fileName string, password string) Location {
 func LoadFromStdin(password string) Location {
 	content, err := io.ReadAll(os.Stdin)
 	if err != nil {
-		slog.Error(fmt.Sprintf("load from stdin: %v", err.Error()))
 		return Location{Path: "stdin", Error: err}
 	}
 	return loadContent("stdin", content, password)
@@ -362,7 +358,6 @@ func LoadFromStdin(password string) Location {
 // LoadFromClipboard loads certificates or CSRs from clipboard with auto-detection
 func LoadFromClipboard(password string) Location {
 	if err := clipboard.Init(); err != nil {
-		slog.Error(fmt.Sprintf("load from clipboard: %v", err.Error()))
 		return Location{Path: "clipboard", Error: err}
 	}
 
@@ -426,7 +421,6 @@ func loadContent(source string, data []byte, password string) Location {
 
 	// If both failed, return certificate error as it's more common
 	if certErr != nil {
-		slog.Error(fmt.Sprintf("parse %s: %v", source, certErr.Error()))
 		return Location{Path: source, Error: certErr}
 	}
 

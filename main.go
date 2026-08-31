@@ -44,6 +44,7 @@ func main() {
 	}
 
 	locations := verifyThenFilter(LoadLocations(flags), flags)
+	reportLoadFailures(locations)
 	if flags.Revocation && revocationIsRendered(flags) {
 		ctx, cancel := context.WithTimeout(context.Background(), flags.Timeout*revocationBudgetMultiple)
 		checker := &cert.RevocationChecker{
@@ -129,6 +130,36 @@ func printOptions(flags Flags) print.Options {
 		Extensions:  flags.Extensions,
 		Signature:   flags.Signature,
 		Fingerprint: flags.Fingerprint,
+	}
+}
+
+// reportLoadFailures announces on stderr each location that could not be read.
+//
+// This is the one place it is said. The packages that do the reading return
+// their errors and the printers put them in the document, which is right for
+// someone reading the output, and invisible when the output is redirected
+// somewhere: certreader -pem-only host:443 > chain.pem would otherwise write a
+// file and say nothing about the half of it that failed.
+func reportLoadFailures(locations cert.Locations) {
+	for _, location := range locations {
+		if location.Error != nil {
+			slog.Error("cannot read location", slog.String("location", location.Name()), slog.Any("err", location.Error))
+			continue
+		}
+
+		// A file can be read while a block inside it cannot. That block is
+		// reported in the document, and a run whose output is redirected would
+		// otherwise not hear about it at all.
+		for _, certificate := range location.Certificates {
+			if err := certificate.Error(); err != nil {
+				slog.Error("cannot read certificate", slog.String("location", location.Name()), slog.Any("err", err))
+			}
+		}
+		for _, csr := range location.CSRs {
+			if err := csr.Error(); err != nil {
+				slog.Error("cannot read certificate request", slog.String("location", location.Name()), slog.Any("err", err))
+			}
+		}
 	}
 }
 

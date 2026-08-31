@@ -5,7 +5,6 @@ package print
 import (
 	"fmt"
 	"github.com/jonhadfield/certreader/pkg/cert"
-	"log/slog"
 	"strings"
 	"time"
 )
@@ -35,7 +34,6 @@ func printCertificates(certs cert.Certificates, opts Options) {
 func printCertificate(certificate cert.Certificate, opts Options) {
 
 	if certificate.Error() != nil {
-		slog.Error(certificate.Error().Error())
 		fmt.Println(certificate.Error())
 		return
 	}
@@ -120,7 +118,6 @@ func splitString(in, prefix string, size int) []string {
 func Locations(locations []cert.Location, opts Options) {
 	for _, location := range locations {
 		if location.Error != nil {
-			slog.Error(fmt.Sprintf("%s: %v", location.Name(), location.Error))
 			fmt.Printf("--- [%s: %v] ---\n", location.Name(), location.Error)
 			fmt.Println()
 			continue
@@ -139,7 +136,6 @@ func Locations(locations []cert.Location, opts Options) {
 			if opts.Chains {
 				chains, err := location.Chains()
 				if err != nil {
-					slog.Error(fmt.Sprintf("chains for %s: %v", location.Name(), err))
 					fmt.Printf("--- [chains for %s: %v] ---\n", location.Name(), err)
 					continue
 				}
@@ -162,7 +158,6 @@ func Locations(locations []cert.Location, opts Options) {
 func Pem(locations []cert.Location, printChains bool) {
 	for _, location := range locations {
 		if location.Error != nil {
-			slog.Error(fmt.Sprintf("%s: %v", location.Name(), location.Error))
 			fmt.Printf("--- [%s: %v] ---\n", location.Name(), location.Error)
 			fmt.Println()
 			continue
@@ -171,7 +166,6 @@ func Pem(locations []cert.Location, printChains bool) {
 		if location.IsCSR() {
 			for _, csr := range location.CSRs {
 				if csr.Error() != nil {
-					slog.Error(csr.Error().Error())
 					fmt.Println(csr.Error())
 					continue
 				}
@@ -180,7 +174,6 @@ func Pem(locations []cert.Location, printChains bool) {
 		} else if location.IsCertificate() {
 			for _, certificate := range location.Certificates {
 				if certificate.Error() != nil {
-					slog.Error(certificate.Error().Error())
 					fmt.Println(certificate.Error())
 					continue
 				}
@@ -190,7 +183,6 @@ func Pem(locations []cert.Location, printChains bool) {
 			if printChains {
 				chains, err := location.Chains()
 				if err != nil {
-					slog.Error(fmt.Sprintf("chains for %s: %v", location.Name(), err))
 					fmt.Printf("--- [chains for %s: %v] ---\n", location.Name(), err)
 					continue
 				}
@@ -212,7 +204,6 @@ func Pem(locations []cert.Location, printChains bool) {
 func Expiry(locations []cert.Location) {
 	for _, location := range locations {
 		if location.Error != nil {
-			slog.Error(fmt.Sprintf("%s: %v", location.Name(), location.Error))
 			fmt.Printf("%s: ERROR: %v\n", location.Name(), location.Error)
 			continue
 		}
@@ -221,7 +212,6 @@ func Expiry(locations []cert.Location) {
 		if location.IsCertificate() {
 			for _, certificate := range location.Certificates {
 				if certificate.Error() != nil {
-					slog.Error(certificate.Error().Error())
 					fmt.Printf("%s: %s\n", location.Name(), certificate.Error())
 					continue
 				}
