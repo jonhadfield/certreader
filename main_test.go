@@ -399,3 +399,15 @@ func TestReportLoadFailures(t *testing.T) {
 		assert.Empty(t, logged)
 	})
 }
+
+func TestTracer(t *testing.T) {
+	// The packages take a logger rather than reaching for the global one, so
+	// this is the only place -verbose is answered.
+	t.Run("given -verbose, then a logger is handed over", func(t *testing.T) {
+		assert.NotNil(t, tracer(Flags{Verbose: true}))
+	})
+
+	t.Run("given no -verbose, then nothing is", func(t *testing.T) {
+		assert.Nil(t, tracer(Flags{}))
+	})
+}

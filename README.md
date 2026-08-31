@@ -64,7 +64,7 @@ certreader [flags] [<file>|<host:port> ...]
 | -starttls     | upgrade a plaintext connection to tls: smtp, imap, pop3, ftp, nntp, ldap, postgres                |
 | -sort-expiry  | sort certificates by expiration date                                                              |
 | -subject-like | print certificates with subject field containing supplied string                                  |
-| -verbose      | verbose logging, to stderr                                                                        |
+| -verbose      | trace what is being done, to stderr                                                                |
 | -verify       | verify against the system trust store and report why it fails                                     |
 | -timeout      | how long to wait for a connection, and proportionally longer for revocation requests (default 5s)  |
 | -more         | use a combination of the '-pem -signature -chains' flags                                          |
@@ -96,6 +96,28 @@ The rest of the request is still printed either way — it is what the request c
 alongside the reason not to believe it. `-fail-on-warning` exits non-zero on one that does not
 verify, and `-json` carries `self_signature_valid` along with a warning coded
 `invalid-self-signature`.
+
+## verbose
+
+`-verbose` traces what the tool is doing, on stderr, so stdout is still the document:
+
+```shell script
+certreader -verbose -revocation google.com:443
+```
+
+```
+level=DEBUG msg=reading locations=1 concurrency=100 timeout=5s
+level=DEBUG msg=connecting address=google.com:443 starttls="" timeout=5s server_name=""
+level=DEBUG msg=connected address=google.com:443 after=72ms tls="TLS 1.3" certificates=3 stapled_ocsp=false
+level=DEBUG msg="checking revocation" subject=*.google.com serial=E0:E3:... stapled=false ocsp_responders=0 crl_distribution_points=1
+level=DEBUG msg="reading a CRL" distribution_point=http://c.pki.goog/wr2/oBFYYahzgVI.crl
+level=DEBUG msg="downloading a CRL" distribution_point=http://c.pki.goog/wr2/oBFYYahzgVI.crl
+level=DEBUG msg="CRL read" distribution_point=http://c.pki.goog/wr2/oBFYYahzgVI.crl revoked_certificates=1387
+```
+
+This is the answer to "why did it say that": above, the certificate names no OCSP responder, which is
+why a CRL was read instead. A `reading` line with no `downloading` after it is a list already held,
+so a scan of many hosts behind one authority shows that it fetched the list once.
 
 ## compare
 
