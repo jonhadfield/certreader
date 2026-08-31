@@ -73,6 +73,27 @@ When a PKCS#12/PFX input requires a password and no `--pfx-password` value is su
 terminal; set the flag or `CERTREADER_PFX_PASSWORD` for non-interactive usage.
 ```
 
+## certificate requests
+
+A request is signed by the key it asks to have certified. That self-signature is the only evidence
+the requester holds the matching private key, and the only thing binding the subject and the
+alternative names to it. Without it a request is a list of claims anyone could have written.
+
+`certreader` checks it and says so, whether or not it holds:
+
+```
+Self-Signature: verified against the key in the request
+```
+
+```
+Self-Signature: self-signature does not verify: crypto/rsa: verification error
+```
+
+The rest of the request is still printed either way — it is what the request claims, worth reading
+alongside the reason not to believe it. `-fail-on-warning` exits non-zero on one that does not
+verify, and `-json` carries `self_signature_valid` along with a warning coded
+`invalid-self-signature`.
+
 ## fingerprints
 
 `-fingerprint` prints two, and they answer different questions:

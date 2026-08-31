@@ -73,14 +73,18 @@ type jsonWarning struct {
 type jsonCSR struct {
 	Error string `json:"error,omitempty"`
 	// a pointer because PKCS#10 v1 encodes as 0, which omitempty would hide
-	Version            *int            `json:"version,omitempty"`
-	Subject            string          `json:"subject,omitempty"`
-	SignatureAlgorithm string          `json:"signature_algorithm,omitempty"`
-	PublicKeyAlgorithm string          `json:"public_key_algorithm,omitempty"`
-	DNSNames           []string        `json:"dns_names,omitempty"`
-	IPAddresses        []string        `json:"ip_addresses,omitempty"`
-	EmailAddresses     []string        `json:"email_addresses,omitempty"`
-	URIs               []string        `json:"uris,omitempty"`
+	Version            *int     `json:"version,omitempty"`
+	Subject            string   `json:"subject,omitempty"`
+	SignatureAlgorithm string   `json:"signature_algorithm,omitempty"`
+	PublicKeyAlgorithm string   `json:"public_key_algorithm,omitempty"`
+	DNSNames           []string `json:"dns_names,omitempty"`
+	IPAddresses        []string `json:"ip_addresses,omitempty"`
+	EmailAddresses     []string `json:"email_addresses,omitempty"`
+	URIs               []string `json:"uris,omitempty"`
+	// a pointer so that false is reported rather than omitted: a consumer
+	// needs to tell "did not verify" from "was not checked"
+	SelfSignatureValid *bool           `json:"self_signature_valid,omitempty"`
+	Warnings           []jsonWarning   `json:"warnings,omitempty"`
 	Extensions         []jsonExtension `json:"extensions,omitempty"`
 	Signature          string          `json:"signature,omitempty"`
 	PEM                string          `json:"pem,omitempty"`
@@ -259,9 +263,7 @@ func buildCertificate(certificate cert.Certificate, opts Options) jsonCertificat
 	if opts.Extensions {
 		out.Extensions = buildExtensions(certificate.Extensions())
 	}
-	for _, warning := range certificate.Warnings() {
-		out.Warnings = append(out.Warnings, jsonWarning{Code: warning.Code, Message: warning.Message})
-	}
+	out.Warnings = buildWarnings(certificate.Warnings())
 	if opts.Signature {
 		out.Signature = certificate.Signature()
 	}
@@ -289,6 +291,10 @@ func buildCSR(csr cert.CSR, opts Options) jsonCSR {
 	out.EmailAddresses = csr.EmailAddresses()
 	out.URIs = csr.URIs()
 
+	valid := csr.SelfSignatureValid()
+	out.SelfSignatureValid = &valid
+	out.Warnings = buildWarnings(csr.Warnings())
+
 	if opts.Extensions {
 		out.Extensions = buildExtensions(csr.Extensions())
 	}
@@ -297,6 +303,14 @@ func buildCSR(csr cert.CSR, opts Options) jsonCSR {
 	}
 	if opts.Pem {
 		out.PEM = string(csr.ToPEM())
+	}
+	return out
+}
+
+func buildWarnings(warnings []cert.Warning) []jsonWarning {
+	var out []jsonWarning
+	for _, warning := range warnings {
+		out = append(out, jsonWarning{Code: warning.Code, Message: warning.Message})
 	}
 	return out
 }
