@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="863" height="470" viewBox="0 0 863 470" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="14">
+<rect width="863" height="470" rx="10" fill="#0d1117" stroke="#30363d"/>
+<path d="M0 10a10 10 0 0 1 10-10h843a10 10 0 0 1 10 10v22H0z" fill="#161b22"/>
+<line x1="0" y1="32" x2="863" y2="32" stroke="#30363d"/>
+<circle cx="20" cy="16" r="6" fill="#ff5f57"/>
+<circle cx="40" cy="16" r="6" fill="#febc2e"/>
+<circle cx="60" cy="16" r="6" fill="#28c840"/>
+<text x="432" y="21" fill="#8b949e" font-size="12" text-anchor="middle">certreader</text>
+<text x="20" y="52" xml:space="preserve"><tspan fill="#7ee787">$ </tspan><tspan fill="#f0f6fc">certreader -expiry google.com:443 github.com:443</tspan></text>
+<text y="72" xml:space="preserve"><tspan x="20.0" textLength="201.6" lengthAdjust="spacing" fill="#c9d1d9">google.com:443 TLS 1.3: </tspan><tspan x="221.6" textLength="201.6" lengthAdjust="spacing" fill="#7ee787">Nov  2 08:37:34 2026 UTC</tspan><tspan x="423.2" textLength="117.6" lengthAdjust="spacing" fill="#c9d1d9">  *.google.com</tspan></text>
+<text y="92" xml:space="preserve"><tspan x="20.0" textLength="201.6" lengthAdjust="spacing" fill="#c9d1d9">google.com:443 TLS 1.3: </tspan><tspan x="221.6" textLength="201.6" lengthAdjust="spacing" fill="#7ee787">Feb 20 14:00:00 2029 UTC</tspan><tspan x="423.2" textLength="42.0" lengthAdjust="spacing" fill="#c9d1d9">  WR2</tspan></text>
+<text y="112" xml:space="preserve"><tspan x="20.0" textLength="201.6" lengthAdjust="spacing" fill="#c9d1d9">google.com:443 TLS 1.3: </tspan><tspan x="221.6" textLength="201.6" lengthAdjust="spacing" fill="#7ee787">Jan 28 00:00:42 2028 UTC</tspan><tspan x="423.2" textLength="109.2" lengthAdjust="spacing" fill="#c9d1d9">  GTS Root R1</tspan></text>
+<text y="132" xml:space="preserve"><tspan x="20.0" textLength="201.6" lengthAdjust="spacing" fill="#c9d1d9">github.com:443 TLS 1.3: </tspan><tspan x="221.6" textLength="201.6" lengthAdjust="spacing" fill="#e3b341">Sep 30 23:59:59 2026 UTC</tspan><tspan x="423.2" textLength="100.8" lengthAdjust="spacing" fill="#c9d1d9">  github.com</tspan></text>
+<text y="152" xml:space="preserve"><tspan x="20.0" textLength="201.6" lengthAdjust="spacing" fill="#c9d1d9">github.com:443 TLS 1.3: </tspan><tspan x="221.6" textLength="201.6" lengthAdjust="spacing" fill="#7ee787">Mar 21 23:59:59 2036 UTC</tspan><tspan x="423.2" textLength="403.2" lengthAdjust="spacing" fill="#c9d1d9">  Sectigo Public Server Authentication CA DV E36</tspan></text>
+<text y="172" xml:space="preserve"><tspan x="20.0" textLength="201.6" lengthAdjust="spacing" fill="#c9d1d9">github.com:443 TLS 1.3: </tspan><tspan x="221.6" textLength="201.6" lengthAdjust="spacing" fill="#7ee787">Jan 18 23:59:59 2038 UTC</tspan><tspan x="423.2" textLength="394.8" lengthAdjust="spacing" fill="#c9d1d9">  Sectigo Public Server Authentication Root E46</tspan></text>
+<text x="20" y="212" xml:space="preserve"><tspan fill="#7ee787">$ </tspan><tspan fill="#f0f6fc">certreader request.csr</tspan></text>
+<text y="232" xml:space="preserve"><tspan x="20.0" textLength="176.4" lengthAdjust="spacing" fill="#c9d1d9">--- [request.csr] ---</tspan></text>
+<text y="252" xml:space="preserve"><tspan x="20.0" textLength="58.8" lengthAdjust="spacing" fill="#79c0ff">Version</tspan><tspan x="78.8" textLength="75.6" lengthAdjust="spacing" fill="#c9d1d9">: 1 (0x0)</tspan></text>
+<text y="272" xml:space="preserve"><tspan x="20.0" textLength="159.6" lengthAdjust="spacing" fill="#79c0ff">Signature Algorithm</tspan><tspan x="179.6" textLength="100.8" lengthAdjust="spacing" fill="#c9d1d9">: SHA256-RSA</tspan></text>
+<text y="292" xml:space="preserve"><tspan x="20.0" textLength="58.8" lengthAdjust="spacing" fill="#79c0ff">Subject</tspan><tspan x="78.8" textLength="562.8" lengthAdjust="spacing" fill="#c9d1d9">: CN=test.example.com,O=Test Org,L=San Francisco,ST=California,C=US</tspan></text>
+<text y="312" xml:space="preserve"><tspan x="20.0" textLength="75.6" lengthAdjust="spacing" fill="#79c0ff">DNS Names</tspan><tspan x="95.6" textLength="436.8" lengthAdjust="spacing" fill="#c9d1d9">: test.example.com, www.example.com, api.example.com</tspan></text>
+<text y="332" xml:space="preserve"><tspan x="20.0" textLength="100.8" lengthAdjust="spacing" fill="#79c0ff">IP Addresses</tspan><tspan x="120.8" textLength="109.2" lengthAdjust="spacing" fill="#c9d1d9">: 192.168.1.1</tspan></text>
+<text y="352" xml:space="preserve"><tspan x="20.0" textLength="126.0" lengthAdjust="spacing" fill="#79c0ff">Email Addresses</tspan><tspan x="146.0" textLength="16.8" lengthAdjust="spacing" fill="#c9d1d9">: </tspan></text>
+<text y="372" xml:space="preserve"><tspan x="20.0" textLength="33.6" lengthAdjust="spacing" fill="#79c0ff">URIs</tspan><tspan x="53.6" textLength="16.8" lengthAdjust="spacing" fill="#c9d1d9">: </tspan></text>
+<text y="392" xml:space="preserve"><tspan x="20.0" textLength="84.0" lengthAdjust="spacing" fill="#79c0ff">Public Key</tspan></text>
+<text y="412" xml:space="preserve"><tspan x="20.0" textLength="33.6" lengthAdjust="spacing" fill="#c9d1d9">    </tspan><tspan x="53.6" textLength="75.6" lengthAdjust="spacing" fill="#56d4dd">Algorithm</tspan><tspan x="129.2" textLength="42.0" lengthAdjust="spacing" fill="#c9d1d9">: RSA</tspan></text>
+<text y="432" xml:space="preserve"><tspan x="20.0" textLength="117.6" lengthAdjust="spacing" fill="#79c0ff">Self-Signature</tspan><tspan x="137.6" textLength="16.8" lengthAdjust="spacing" fill="#c9d1d9">: </tspan><tspan x="154.4" textLength="520.8" lengthAdjust="spacing" fill="#e3b341">self-signature does not verify: crypto/rsa: verification error</tspan></text>
+</svg>

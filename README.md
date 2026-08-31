@@ -21,6 +21,8 @@ A fork of the excellent [certinfo](https://github.com/pete911/certinfo), adding:
 
 Output detailed information about TLS certificates from local files, network hosts or clipboard.
 
+![certreader reading two hosts and a certificate request](docs/screenshot.svg)
+
 ## usage
 
 ```shell script
