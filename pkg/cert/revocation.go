@@ -135,6 +135,15 @@ type RevocationChecker struct {
 	// SkipIssuerFetch stops a missing issuer being downloaded from the
 	// certificate's authority information access extension.
 	SkipIssuerFetch bool
+	// FollowRedirects allows a request to be sent somewhere other than the
+	// address the certificate named. It is off, so the only host contacted is
+	// the one written in the certificate: a redirect can send a request into a
+	// network the certificate has no business naming, and the certificate is
+	// written by whoever issued it rather than by whoever is reading it.
+	//
+	// When it is on, each hop is checked as the first address was, and the
+	// chain is capped.
+	FollowRedirects bool
 	// Logger traces what was tried, at debug level. Nil discards it: the
 	// package does not decide whether the caller wants to hear about this, and
 	// does not reach for the global logger to find out.
@@ -171,6 +180,7 @@ func (c *RevocationChecker) client() *http.Client {
 			Transport: &http.Transport{
 				Proxy: http.ProxyFromEnvironment,
 			},
+			CheckRedirect: c.checkRedirect,
 		}
 	})
 	return c.defaultClient
@@ -191,6 +201,39 @@ func (c *RevocationChecker) maxResponseSize() int64 {
 // A nil issuer means responses cannot be authenticated: OCSP is skipped
 // entirely, because a request cannot be built without it, and any CRL verdict
 // is reported with SignatureVerified false.
+// maxRedirects bounds a chain that is allowed to be followed. Go's own default
+// is ten, which is more hops than a certificate has any reason to ask for.
+const maxRedirects = 3
+
+// checkRedirect decides whether a request may be sent somewhere other than
+// where it was addressed.
+//
+// The address came out of a certificate, so the reader did not choose it and
+// cannot be assumed to have looked at it. Following a redirect from there sends
+// a request to a second address the reader chose even less: a public URL can
+// bounce into a private network, and the response need never come back for
+// that to have happened. So it is refused, and says so, rather than being
+// quietly obeyed.
+//
+// A caller supplying its own HTTPClient decides this for itself.
+func (c *RevocationChecker) checkRedirect(request *http.Request, via []*http.Request) error {
+
+	if !c.FollowRedirects {
+		return fmt.Errorf("redirected to %s, which is not where the certificate said: allow it with -follow-redirects", request.URL.Redacted())
+	}
+	if len(via) > maxRedirects {
+		return fmt.Errorf("redirected more than %d times", maxRedirects)
+	}
+	if err := validateHTTPURL(request.URL.String()); err != nil {
+		return fmt.Errorf("redirected to %s: %w", request.URL.Redacted(), err)
+	}
+
+	c.log().Debug("following a redirect",
+		slog.String("to", request.URL.Redacted()),
+		slog.Int("hop", len(via)))
+	return nil
+}
+
 // log is the caller's logger, or one that keeps nothing.
 func (c *RevocationChecker) log() *slog.Logger {
 	if c.Logger == nil {

@@ -49,6 +49,7 @@ certreader [flags] [<file>|<host:port> ...]
 | -expiring-within | exit non-zero if any certificate expires within this window, e.g. 30d, 2w, 72h                  |
 | -fail-on-warning | exit non-zero if any certificate or chain warning is reported                                   |
 | -fingerprint  | print the sha-256 of the certificate and of its public key                                        |
+| -follow-redirects| allow a revocation or issuer request to be redirected away from the address the certificate named |
 | -extensions   | whether to print extensions                                                                       |
 | -insecure     | whether a client verifies the server's certificate chain and host name (only applicable for host) |
 | -issuer-like  | print certificates with issuer field containing supplied string                                   |
@@ -96,6 +97,25 @@ The rest of the request is still printed either way — it is what the request c
 alongside the reason not to believe it. `-fail-on-warning` exits non-zero on one that does not
 verify, and `-json` carries `self_signature_valid` along with a warning coded
 `invalid-self-signature`.
+
+### where the requests go
+
+`-revocation` and the issuer fetch send requests to addresses written in the certificate, by whoever
+issued it. Only those addresses are contacted: a redirect is refused, and says so.
+
+```
+Revocation
+    OCSP responder (http://ocsp.example.com): redirected to http://10.0.0.1/, which is not where the
+    certificate said: allow it with -follow-redirects
+```
+
+A redirect can send a request somewhere the certificate has no business naming — a private address,
+a service on the machine running this — and the response never has to come back for the request to
+have been made. `-follow-redirects` allows it, checks each hop as the first address was checked, and
+stops after three.
+
+Refusing them costs nothing in practice: ten public hosts including Google, GitHub, Cloudflare,
+Apple, Amazon, Microsoft, Stripe and PayPal all answer without a redirect.
 
 ## verbose
 

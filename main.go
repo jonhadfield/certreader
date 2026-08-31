@@ -57,9 +57,10 @@ func main() {
 	if flags.Revocation && revocationIsRendered(flags) {
 		ctx, cancel := context.WithTimeout(context.Background(), flags.Timeout*revocationBudgetMultiple)
 		checker := &cert.RevocationChecker{
-			RequestTimeout: flags.Timeout * revocationRequestMultiple,
-			Concurrency:    flags.Concurrency,
-			Logger:         tracer(flags),
+			RequestTimeout:  flags.Timeout * revocationRequestMultiple,
+			Concurrency:     flags.Concurrency,
+			FollowRedirects: flags.FollowRedirects,
+			Logger:          tracer(flags),
 		}
 		locations = locations.CheckRevocation(ctx, checker)
 		// not deferred, because the process exits below without unwinding
