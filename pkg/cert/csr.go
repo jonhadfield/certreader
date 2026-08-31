@@ -4,11 +4,9 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
-	"encoding/hex"
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"strings"
 )
 
 const csrBlockType = "CERTIFICATE REQUEST"
@@ -19,15 +17,6 @@ type CSR struct {
 	position int
 	x509CSR  *x509.CertificateRequest
 	err      error
-}
-
-// FromX509CertificateRequests converts x509.CertificateRequest slice to CSRs
-func FromX509CertificateRequests(csrs []*x509.CertificateRequest) CSRs {
-	var requests CSRs
-	for i, c := range csrs {
-		requests = append(requests, CSR{position: i + 1, x509CSR: c})
-	}
-	return requests
 }
 
 // FromCSRBytes converts raw CSR bytes to CSR structures. Supports PEM and DER formats.
@@ -201,17 +190,4 @@ func (c CSR) Extensions() []Extension {
 		})
 	}
 	return out
-}
-
-func formatCSRHexArray(b []byte) string {
-	if len(b) == 0 {
-		return ""
-	}
-	buf := make([]byte, 0, 3*len(b))
-	x := buf[1*len(b) : 3*len(b)]
-	hex.Encode(x, b)
-	for i := 0; i < len(x); i += 2 {
-		buf = append(buf, x[i], x[i+1], ':')
-	}
-	return strings.ToUpper(string(buf[:len(buf)-1]))
 }
