@@ -7,6 +7,8 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"unicode/utf16"
+	"unicode/utf8"
 )
 
 // RelativeDistinguishedName ::= SET SIZE (1..MAX) OF AttributeTypeAndValue
@@ -36,7 +38,7 @@ func ToRelativeDistinguishedName(in []byte) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		typeValues = append(typeValues, fmt.Sprintf("%s: %s", out.TypeId.String(), string(out.Value.Bytes)))
+		typeValues = append(typeValues, fmt.Sprintf("%s: %s", out.TypeId.String(), asn1String(out.Value)))
 		if len(rest) == 0 {
 			break
 		}
@@ -453,16 +455,16 @@ func toUserNotice(in []byte) (string, bool) {
 	}
 
 	var parts []string
-	if organization := string(notice.NoticeRef.Organization.Bytes); organization != "" {
+	if organization := asn1String(notice.NoticeRef.Organization); organization != "" {
 		numbers := make([]string, 0, len(notice.NoticeRef.NoticeNumbers))
 		for _, number := range notice.NoticeRef.NoticeNumbers {
 			numbers = append(numbers, strconv.Itoa(number))
 		}
 		parts = append(parts, fmt.Sprintf("%s %s", organization, strings.Join(numbers, ",")))
 	}
-	// DisplayText is a CHOICE of string types, all of which carry their text in
-	// the contents, so the tag does not need distinguishing
-	if text := string(notice.ExplicitText.Bytes); text != "" {
+	// DisplayText is a CHOICE of string types, and which one it is decides how
+	// the bytes read: a bmpString is UTF-16, not text to be printed as it lies.
+	if text := asn1String(notice.ExplicitText); text != "" {
 		parts = append(parts, text)
 	}
 	if len(parts) == 0 {
@@ -477,6 +479,64 @@ func ToSignedCertificateTimestampList(in []byte) ([]byte, error) {
 		return nil, err
 	}
 	return out.Bytes, nil
+}
+
+// --- strings ---
+
+// tagUniversalString is UniversalString, which encoding/asn1 has no constant
+// for.
+const tagUniversalString = 28
+
+// asn1String reads the text out of an ASN.1 string, which takes the tag as well
+// as the bytes: the string types do not all hold their text the same way. A
+// BMPString is UTF-16 and a UniversalString UTF-32, so taking their bytes as
+// they stand puts NUL bytes and half characters on the terminal, and text with
+// an accent in it comes out as invalid UTF-8.
+//
+// Every other type is returned as it stands. That is right for UTF8String and
+// for the ASCII subsets, and no worse than before for the rest.
+func asn1String(value asn1.RawValue) string {
+	switch value.Tag {
+	case asn1.TagBMPString:
+		return utf16BEString(value.Bytes)
+	case tagUniversalString:
+		return utf32BEString(value.Bytes)
+	default:
+		return string(value.Bytes)
+	}
+}
+
+// utf16BEString decodes UTF-16 in the big endian order ASN.1 uses. Bytes that
+// do not divide into pairs are not UTF-16, so they are left alone rather than
+// guessed at.
+func utf16BEString(in []byte) string {
+	if len(in) == 0 || len(in)%2 != 0 {
+		return string(in)
+	}
+
+	units := make([]uint16, 0, len(in)/2)
+	for i := 0; i < len(in); i += 2 {
+		units = append(units, uint16(in[i])<<8|uint16(in[i+1]))
+	}
+	return string(utf16.Decode(units))
+}
+
+// utf32BEString decodes UTF-32, as above.
+func utf32BEString(in []byte) string {
+	if len(in) == 0 || len(in)%4 != 0 {
+		return string(in)
+	}
+
+	var out strings.Builder
+	for i := 0; i < len(in); i += 4 {
+		point := uint32(in[i])<<24 | uint32(in[i+1])<<16 | uint32(in[i+2])<<8 | uint32(in[i+3])
+		character := rune(point)
+		if point > utf8.MaxRune || !utf8.ValidRune(character) {
+			character = utf8.RuneError
+		}
+		out.WriteRune(character)
+	}
+	return out.String()
 }
 
 // --- bit strings and conversions ---
@@ -639,7 +699,7 @@ func toGeneralName(in asn1.RawValue) GeneralName {
 		}
 		// only if there is no error, otherwise continue and just use default value
 		if _, err := asn1.Unmarshal(in.Bytes, &out); err == nil {
-			value = fmt.Sprintf("%s: %s", out.TypeId.String(), string(out.Value.Bytes))
+			value = fmt.Sprintf("%s: %s", out.TypeId.String(), asn1String(out.Value))
 		}
 	}
 
