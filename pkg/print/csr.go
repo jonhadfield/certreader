@@ -34,6 +34,15 @@ func printCSR(csr cert.CSR, printExtensions, printSignature bool) {
 	fmt.Printf("%s\n", AttributeName("Public Key"))
 	fmt.Printf("    %s: %s\n", SubAttributeName("Algorithm"), csr.PublicKeyAlgorithm())
 
+	// A request is signed by the key it asks to have certified, and that
+	// signature is what binds everything above to that key. It is printed
+	// whether or not it holds, since a reader has no way to tell otherwise.
+	if err := csr.CheckSelfSignature(); err != nil {
+		fmt.Printf("%s: %s\n", AttributeName("Self-Signature"), WarningText(err.Error()))
+	} else {
+		fmt.Printf("%s: %s\n", AttributeName("Self-Signature"), "verified against the key in the request")
+	}
+
 	if printExtensions {
 		fmt.Printf("%s:\n", AttributeName("Extensions"))
 		for _, extension := range csr.Extensions() {

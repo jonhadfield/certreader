@@ -81,5 +81,12 @@ func hasWarnings(location cert.Location) bool {
 			return true
 		}
 	}
+	// a request whose self-signature does not hold is the one warning a
+	// request can carry, and the one worth failing a check over
+	for _, csr := range location.CSRs {
+		if len(csr.Warnings()) != 0 {
+			return true
+		}
+	}
 	return false
 }

@@ -329,3 +329,24 @@ func Test_revocationIsRendered(t *testing.T) {
 	assert.True(t, revocationIsRendered(Flags{JSON: true, Expiry: true}))
 	assert.True(t, revocationIsRendered(Flags{JSON: true, PemOnly: true}))
 }
+
+func TestExitStatusForACSRThatDoesNotVerify(t *testing.T) {
+	// The only warning a request can carry, and the reason to fail a check on
+	// one: everything it claims is unbound to the key without this.
+	location := cert.LoadFromFile("pkg/cert/testdata/csr_bad_signature.pem", "")
+	require.Nil(t, location.Error)
+	locations := cert.Locations{location}
+
+	t.Run("given no flag, then a bad request is reported but does not fail the run", func(t *testing.T) {
+		assert.Equal(t, exitOK, exitStatus(locations, Flags{}))
+	})
+
+	t.Run("given -fail-on-warning, then it fails", func(t *testing.T) {
+		assert.Equal(t, exitCheckFailed, exitStatus(locations, Flags{FailOnWarning: true}))
+	})
+
+	t.Run("given a request that verifies, then it does not", func(t *testing.T) {
+		good := cert.Locations{cert.LoadFromFile("pkg/cert/testdata/csr_san.pem", "")}
+		assert.Equal(t, exitOK, exitStatus(good, Flags{FailOnWarning: true}))
+	})
+}
