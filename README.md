@@ -236,6 +236,13 @@ appear on a chain that verifies perfectly well — so they do not change the res
 | `duplicate-certificate` | a certificate is sent more than once |
 | `chain-out-of-order` | a certificate does not issue the one before it |
 | `leaf-not-first` | the first certificate sent is a CA, where the end-entity is expected |
+| `missing-intermediate` | the certificate that issued the leaf is not sent |
+
+`missing-intermediate` is the one that breaks clients, and the one hardest to notice: macOS and
+Windows keep intermediates they have seen before and fill the gap themselves, so the chain verifies
+on the machine it was tested from and fails for anyone whose store happens not to hold it. It is
+reported from what the server sent rather than from what this computer can make of it, so the answer
+is the same everywhere.
 
 These describe what the server sent, so the display filters do not change them: `-no-duplicate`
 removes the duplicate from the output and `duplicate-certificate` is still reported, since the server
