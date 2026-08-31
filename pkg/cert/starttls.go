@@ -102,19 +102,55 @@ func readReplyLine(r *bufio.Reader) (string, error) {
 	return strings.TrimRight(line, "\r\n"), nil
 }
 
-// readCodeReply reads a reply that may span several lines. SMTP, FTP and NNTP
-// share the convention that a continued line has a hyphen in the fourth column.
+// readCodeReply reads a reply that may span several lines.
+//
+// A reply is continued when the code is followed by a hyphen, and ends at the
+// line carrying that same code followed by a space. What lies between need not
+// carry the code at all. RFC 959 asks only that such a line does not begin with
+// three digits, so a greeting like
+//
+//	220-Welcome to example.net!
+//	    See https://example.net/ for terms of use.
+//	220 Log in as anonymous.
+//
+// has a middle line with nothing to match on. Reading until "a line without a
+// hyphen in the fourth column" stopped at that line and returned the prose,
+// which is not a reply, and the connection was abandoned over a banner.
+//
+// SMTP repeats the code on every line, so it ends on the same rule either way.
 func readCodeReply(r *bufio.Reader) (string, error) {
 
+	line, err := readReplyLine(r)
+	if err != nil {
+		return "", err
+	}
+	if !isContinued(line) {
+		return line, nil
+	}
+
+	code := line[:3]
 	for {
-		line, err := readReplyLine(r)
+		line, err = readReplyLine(r)
 		if err != nil {
 			return "", err
 		}
-		if len(line) < 4 || line[3] != '-' {
+		if isFinalLine(line, code) {
 			return line, nil
 		}
 	}
+}
+
+// isContinued reports whether more of the reply follows this line.
+func isContinued(line string) bool {
+	return len(line) >= 4 && line[3] == '-'
+}
+
+// isFinalLine reports whether this line ends a reply that began with code.
+func isFinalLine(line, code string) bool {
+	if !strings.HasPrefix(line, code) {
+		return false
+	}
+	return len(line) == len(code) || line[len(code)] == ' '
 }
 
 // expectCode reads a reply and checks it begins with one of the given codes.
