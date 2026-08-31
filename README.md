@@ -384,6 +384,28 @@ overridden with a flag.
  - build `make build`
  - install `make install`
 
+## corpus check
+
+`make test` compares known certificates against known output, which covers the cases somebody
+thought to write down. `make corpus` asks a different question — one that has to hold for *any*
+certificate — and puts it to every certificate in the machine's trust store:
+
+- the output is text a terminal can print, with no raw bytes in it
+- `-json` produces a document that parses
+
+```shell script
+make corpus
+scripts/corpus-check.sh some-bundle.pem      # and anything else you have
+```
+
+Certificates are copied to a temporary directory and removed on exit. Nothing is sent anywhere, and
+nothing is added to the repository.
+
+This is how a user notice held as a BMPString was found printing as raw UTF-16, NUL bytes and all:
+two certificates out of a few hundred, neither of which anyone would have thought to write a test
+for. That certificate is a fixture now, so `make test` covers it, and the same sweep runs over the
+fixtures on every test run.
+
 ## release
 
 Releases are built and published with [GoReleaser](https://goreleaser.com) from a tagged commit.
