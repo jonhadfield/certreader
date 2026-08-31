@@ -53,6 +53,10 @@ func main() {
 		cancel()
 	}
 
+	if flags.Compare {
+		os.Exit(compare(locations, flags))
+	}
+
 	switch {
 	case flags.JSON:
 		if err := print.JSON(locations, printOptions(flags)); err != nil {
@@ -68,6 +72,33 @@ func main() {
 	}
 
 	os.Exit(exitStatus(locations, flags))
+}
+
+// compare reports how two locations differ and returns the exit code for it. A
+// difference is a failed check rather than an error: asking whether a host is
+// still serving what was deployed is only worth doing if the answer can be
+// acted on.
+func compare(locations cert.Locations, flags Flags) int {
+	comparison, err := locations.Compare()
+	if err != nil {
+		slog.Error(fmt.Sprintf("-compare: %v", err))
+		fmt.Printf("-compare: %v\n", err)
+		return exitLoadError
+	}
+
+	if flags.JSON {
+		if err := print.CompareJSON(comparison); err != nil {
+			slog.Error(fmt.Sprintf("writing json: %v", err))
+			return exitLoadError
+		}
+	} else {
+		print.Compare(comparison)
+	}
+
+	if comparison.Same() {
+		return exitOK
+	}
+	return exitCheckFailed
 }
 
 // revocationIsRendered reports whether the selected output would show a

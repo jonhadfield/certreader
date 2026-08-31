@@ -42,6 +42,7 @@ type Flags struct {
 	// bound.
 	Concurrency int
 	Chains      bool
+	Compare     bool
 	Fingerprint bool
 	Extensions  bool
 	Signature   bool
@@ -93,6 +94,8 @@ func ParseFlags() (Flags, error) {
 		"exit non-zero if any certificate or chain warning is reported")
 	flagSet.BoolVar(&flags.Verify, "verify", getBoolEnv("CERTREADER_VERIFY", false),
 		"verify against the system trust store and report why it fails")
+	flagSet.BoolVar(&flags.Compare, "compare", getBoolEnv("CERTREADER_COMPARE", false),
+		"compare two locations and report whether they serve the same certificate")
 	flagSet.BoolVar(&flags.Fingerprint, "fingerprint", getBoolEnv("CERTREADER_FINGERPRINT", false),
 		"print the sha-256 of the certificate and of its public key")
 	flagSet.BoolVar(&flags.Chains, "chains", getBoolEnv("CERTREADER_CHAINS", false),

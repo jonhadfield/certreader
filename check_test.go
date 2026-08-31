@@ -350,3 +350,24 @@ func TestExitStatusForACSRThatDoesNotVerify(t *testing.T) {
 		assert.Equal(t, exitOK, exitStatus(good, Flags{FailOnWarning: true}))
 	})
 }
+
+func TestCompareExitCodes(t *testing.T) {
+	// The point of the mode: a check can act on the answer.
+	same := cert.Locations{
+		cert.LoadFromFile("pkg/cert/testdata/cert.pem", ""),
+		cert.LoadFromFile("pkg/cert/testdata/cert.pem", ""),
+	}
+	different := cert.Locations{
+		cert.LoadFromFile("pkg/cert/testdata/cert.pem", ""),
+		cert.LoadFromFile("pkg/cert/testdata/sct.pem", ""),
+	}
+	unreadable := cert.Locations{
+		cert.LoadFromFile("pkg/cert/testdata/cert.pem", ""),
+		cert.LoadFromFile("pkg/cert/testdata/does-not-exist.pem", ""),
+	}
+
+	assert.Equal(t, exitOK, compare(same, Flags{Compare: true}))
+	assert.Equal(t, exitCheckFailed, compare(different, Flags{Compare: true}))
+	assert.Equal(t, exitLoadError, compare(unreadable, Flags{Compare: true}))
+	assert.Equal(t, exitLoadError, compare(same[:1], Flags{Compare: true}), "two locations or nothing")
+}
