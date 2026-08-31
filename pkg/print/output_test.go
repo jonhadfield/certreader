@@ -20,7 +20,7 @@ func TestJSONWritesToStdout(t *testing.T) {
 	locations := []cert.Location{chain.location(nil, true)}
 
 	output := captureStdout(t, func() {
-		require.NoError(t, JSON(locations, false, false, false, false))
+		require.NoError(t, JSON(locations, Options{}))
 	})
 
 	var decoded map[string]any
@@ -205,7 +205,7 @@ func TestLocationsBranches(t *testing.T) {
 		chain := newStapleTestChain(t)
 		locations := cert.Locations{chain.location(nil, true)}
 
-		output := captureStdout(t, func() { Locations(locations, true, false, false, false) })
+		output := captureStdout(t, func() { Locations(locations, Options{Chains: true}) })
 
 		assert.Contains(t, output, "chains for")
 	})
@@ -217,7 +217,7 @@ func TestLocationsBranches(t *testing.T) {
 			Certificates: cert.Certificates{{}},
 		}}
 
-		output := captureStdout(t, func() { Locations(locations, false, false, false, false) })
+		output := captureStdout(t, func() { Locations(locations, Options{}) })
 
 		assert.Contains(t, output, "bundle.pem")
 		assert.NotContains(t, output, "Serial Number", "nothing else is safe to read")
@@ -275,7 +275,7 @@ func loadTestCertificates(t *testing.T, file string) cert.Certificates {
 func TestPrintCertificateVerboseSections(t *testing.T) {
 	certificates := loadTestCertificates(t, "sct.pem")
 
-	output := captureStdout(t, func() { printCertificates(certificates, true, true, true) })
+	output := captureStdout(t, func() { printCertificates(certificates, Options{Pem: true, Extensions: true, Signature: true}) })
 
 	assert.Contains(t, output, "Extensions")
 	assert.Contains(t, output, "CT Precertificate SCTs")

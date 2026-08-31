@@ -90,7 +90,7 @@ func TestCorpusOutputIsPrintable(t *testing.T) {
 			// every flag that adds to the output, since each is a chance to
 			// print something that was never decoded
 			assertPrintable(t, file, printed(t, func() {
-				Locations(locations, false, true, true, true)
+				Locations(locations, Options{Pem: true, Extensions: true, Signature: true})
 			}))
 			assertPrintable(t, file, printed(t, func() {
 				Expiry(locations)
@@ -111,7 +111,7 @@ func TestCorpusJSONIsValid(t *testing.T) {
 			}
 
 			var out strings.Builder
-			require.NoError(t, writeJSON(&out, []cert.Location{location}, false, true, true, true))
+			require.NoError(t, writeJSON(&out, []cert.Location{location}, Options{Pem: true, Extensions: true, Signature: true}))
 
 			// json is UTF-8 by definition, so anything that was not decoded on
 			// the way in makes a document nothing can read

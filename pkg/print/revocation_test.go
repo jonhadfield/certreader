@@ -156,7 +156,7 @@ func TestLocationsPrintsRevocation(t *testing.T) {
 	}
 
 	output := captureStdout(t, func() {
-		Locations(cert.Locations{location}, false, false, false, false)
+		Locations(cert.Locations{location}, Options{})
 	})
 
 	assert.Contains(t, output, "certreader.test:443")

@@ -197,7 +197,7 @@ func TestLocationsPrintsStaple(t *testing.T) {
 	location := chain.location(chain.response(t, ocsp.Response{Status: ocsp.Good}), true)
 
 	output := captureStdout(t, func() {
-		Locations(cert.Locations{location}, false, false, false, false)
+		Locations(cert.Locations{location}, Options{})
 	})
 
 	assert.Contains(t, output, "certreader.test:443")

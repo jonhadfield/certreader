@@ -45,6 +45,7 @@ certreader [flags] [<file>|<host:port> ...]
 | -expiry       | print expiry of certificates                                                                      |
 | -expiring-within | exit non-zero if any certificate expires within this window, e.g. 30d, 2w, 72h                  |
 | -fail-on-warning | exit non-zero if any certificate or chain warning is reported                                   |
+| -fingerprint  | print the sha-256 of the certificate and of its public key                                        |
 | -extensions   | whether to print extensions                                                                       |
 | -insecure     | whether a client verifies the server's certificate chain and host name (only applicable for host) |
 | -issuer-like  | print certificates with issuer field containing supplied string                                   |
@@ -71,6 +72,29 @@ certreader [flags] [<file>|<host:port> ...]
 When a PKCS#12/PFX input requires a password and no `--pfx-password` value is supplied, `certreader` prompts on the
 terminal; set the flag or `CERTREADER_PFX_PASSWORD` for non-interactive usage.
 ```
+
+## fingerprints
+
+`-fingerprint` prints two, and they answer different questions:
+
+```shell script
+certreader -fingerprint example.com:443
+```
+
+```
+Fingerprint SHA-256: CB:3C:CB:B7:60:31:E5:E0:13:8F:8D:D3:9A:23:F9:DE:47:FF:C3:5E:43:C1:14:4C:EA:27:D4:6A:5A:B1:CB:5F
+Public Key SHA-256: i7WTqTvh0OioIruIfFR4kMPnBqrS2rdiVPl/s2uC/CY=
+```
+
+The first names *this certificate*, and is what `openssl x509 -fingerprint -sha256` prints and what a
+browser shows. It changes on every reissue, so it answers "is the load balancer serving the same
+certificate as this file".
+
+The second names *the key*, base64 encoded, which is the form a pin is written in. It survives a
+reissue that keeps the key, so it answers "has the key actually been rotated".
+
+Both are always present in `-json`, as `fingerprint_sha256` and `public_key_sha256`, since something
+reading the output would not know to ask for them.
 
 ## starttls
 

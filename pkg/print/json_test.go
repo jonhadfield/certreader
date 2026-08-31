@@ -22,7 +22,12 @@ func decodeJSON(t *testing.T, locations []cert.Location, printChains, printPem, 
 	t.Helper()
 
 	var buf bytes.Buffer
-	require.NoError(t, writeJSON(&buf, locations, printChains, printPem, printExtensions, printSignature))
+	require.NoError(t, writeJSON(&buf, locations, Options{
+		Chains:     printChains,
+		Pem:        printPem,
+		Extensions: printExtensions,
+		Signature:  printSignature,
+	}))
 
 	var out map[string]any
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &out), "output must be valid json")
@@ -245,13 +250,13 @@ func TestJSONEmptyAndShape(t *testing.T) {
 
 	t.Run("given no locations then an empty array is emitted, not null", func(t *testing.T) {
 		var buf bytes.Buffer
-		require.NoError(t, writeJSON(&buf, nil, false, false, false, false))
+		require.NoError(t, writeJSON(&buf, nil, Options{}))
 		assert.Contains(t, buf.String(), `"locations": []`)
 	})
 
 	t.Run("given output then it is indented and ends with a newline", func(t *testing.T) {
 		var buf bytes.Buffer
-		require.NoError(t, writeJSON(&buf, []cert.Location{{Path: "a.pem"}}, false, false, false, false))
+		require.NoError(t, writeJSON(&buf, []cert.Location{{Path: "a.pem"}}, Options{}))
 		assert.Contains(t, buf.String(), "\n  ")
 		assert.True(t, bytes.HasSuffix(buf.Bytes(), []byte("\n")))
 	})
@@ -259,7 +264,7 @@ func TestJSONEmptyAndShape(t *testing.T) {
 	t.Run("given a subject with html characters then they are not escaped", func(t *testing.T) {
 		var buf bytes.Buffer
 		locations := []cert.Location{{Path: "a<b>.pem", Error: errors.New("x & y")}}
-		require.NoError(t, writeJSON(&buf, locations, false, false, false, false))
+		require.NoError(t, writeJSON(&buf, locations, Options{}))
 		assert.Contains(t, buf.String(), "a<b>.pem")
 		assert.Contains(t, buf.String(), "x & y")
 		// go escapes these by default, which would corrupt subjects and DNs

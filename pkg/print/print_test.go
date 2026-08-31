@@ -24,7 +24,7 @@ func TestPrintCertificate(t *testing.T) {
 		os.Stdout = w
 
 		certs := createTestCertificates(t, 1)
-		printCertificate(certs[0], false, false)
+		printCertificate(certs[0], Options{})
 
 		w.Close()
 		os.Stdout = oldStdout
@@ -83,7 +83,7 @@ func TestLocations(t *testing.T) {
 			},
 		}
 
-		Locations(locations, false, false, false, false)
+		Locations(locations, Options{})
 
 		w.Close()
 		os.Stdout = oldStdout
@@ -104,7 +104,7 @@ func TestLocations(t *testing.T) {
 			},
 		}
 
-		Locations(locations, false, false, false, false)
+		Locations(locations, Options{})
 
 		w.Close()
 		os.Stdout = oldStdout
