@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"golang.design/x/clipboard"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"slices"
@@ -253,6 +254,16 @@ type NetworkOptions struct {
 	// Timeout bounds the connection, and for a starttls protocol the
 	// negotiation and handshake together. Zero selects the default.
 	Timeout time.Duration
+	// Logger traces the connection, at debug level. Nil discards it.
+	Logger *slog.Logger
+}
+
+// log is the caller's logger, or one that keeps nothing.
+func (o NetworkOptions) log() *slog.Logger {
+	if o.Logger == nil {
+		return slog.New(slog.DiscardHandler)
+	}
+	return o.Logger
 }
 
 func (o NetworkOptions) timeout() time.Duration {
@@ -272,6 +283,13 @@ func LoadFromNetwork(addr string, opts NetworkOptions) Location {
 		ServerName:         opts.ServerName,
 	}
 
+	started := time.Now()
+	opts.log().Debug("connecting",
+		slog.String("address", addr),
+		slog.String("starttls", string(opts.StartTLS)),
+		slog.Duration("timeout", opts.timeout()),
+		slog.String("server_name", config.ServerName))
+
 	var conn *tls.Conn
 	var err error
 	if opts.StartTLS == StartTLSNone {
@@ -280,11 +298,19 @@ func LoadFromNetwork(addr string, opts NetworkOptions) Location {
 		conn, err = dialStartTLS(addr, config, opts.StartTLS, opts.timeout())
 	}
 	if err != nil {
+		opts.log().Debug("connection failed", slog.String("address", addr), slog.Duration("after", time.Since(started)), slog.Any("err", err))
 		return Location{Path: addr, Error: err}
 	}
 
 	connectionState := conn.ConnectionState()
 	x509Certificates := connectionState.PeerCertificates
+
+	opts.log().Debug("connected",
+		slog.String("address", addr),
+		slog.Duration("after", time.Since(started)),
+		slog.String("tls", tlsFormat(connectionState.Version)),
+		slog.Int("certificates", len(x509Certificates)),
+		slog.Bool("stapled_ocsp", len(connectionState.OCSPResponse) > 0))
 
 	return Location{
 		TLSVersion:   conn.ConnectionState().Version,

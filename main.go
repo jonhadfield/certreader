@@ -43,13 +43,23 @@ func main() {
 		os.Exit(0)
 	}
 
+	slog.Debug("reading",
+		slog.Int("locations", len(flags.Args)),
+		slog.Int("concurrency", flags.Concurrency),
+		slog.Duration("timeout", flags.Timeout))
+
 	locations := verifyThenFilter(LoadLocations(flags), flags)
 	reportLoadFailures(locations)
+
+	slog.Debug("read",
+		slog.Int("locations", len(locations)),
+		slog.Int("failed", failedCount(locations)))
 	if flags.Revocation && revocationIsRendered(flags) {
 		ctx, cancel := context.WithTimeout(context.Background(), flags.Timeout*revocationBudgetMultiple)
 		checker := &cert.RevocationChecker{
 			RequestTimeout: flags.Timeout * revocationRequestMultiple,
 			Concurrency:    flags.Concurrency,
+			Logger:         tracer(flags),
 		}
 		locations = locations.CheckRevocation(ctx, checker)
 		// not deferred, because the process exits below without unwinding
@@ -122,6 +132,16 @@ func setLogger(verbose bool) {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})))
 }
 
+// tracer is the logger handed to the packages that can say what they are
+// doing, and nothing unless -verbose asked for it. They take a logger rather
+// than reaching for the global one, so this is where the answer is given.
+func tracer(flags Flags) *slog.Logger {
+	if !flags.Verbose {
+		return nil
+	}
+	return slog.Default()
+}
+
 // printOptions is what the flags say to print beyond the certificate itself.
 func printOptions(flags Flags) print.Options {
 	return print.Options{
@@ -161,6 +181,17 @@ func reportLoadFailures(locations cert.Locations) {
 			}
 		}
 	}
+}
+
+// failedCount is how many locations could not be read.
+func failedCount(locations cert.Locations) int {
+	var failed int
+	for _, location := range locations {
+		if location.Error != nil {
+			failed++
+		}
+	}
+	return failed
 }
 
 // verifyThenFilter judges what was read, then reduces it to what is to be
@@ -267,6 +298,7 @@ func loadFromArg(arg string, flags Flags) cert.Location {
 		InsecureSkipVerify: flags.Insecure,
 		StartTLS:           flags.StartTLS,
 		Timeout:            flags.Timeout,
+		Logger:             tracer(flags),
 	}
 	if isTCPNetworkAddress(arg) {
 		return cert.LoadFromNetwork(arg, options)

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"sync"
@@ -134,6 +135,10 @@ type RevocationChecker struct {
 	// SkipIssuerFetch stops a missing issuer being downloaded from the
 	// certificate's authority information access extension.
 	SkipIssuerFetch bool
+	// Logger traces what was tried, at debug level. Nil discards it: the
+	// package does not decide whether the caller wants to hear about this, and
+	// does not reach for the global logger to find out.
+	Logger *slog.Logger
 
 	// A CRL from a public CA can be tens of megabytes, and a scan of many
 	// hosts behind one authority would otherwise download it once per host.
@@ -186,6 +191,14 @@ func (c *RevocationChecker) maxResponseSize() int64 {
 // A nil issuer means responses cannot be authenticated: OCSP is skipped
 // entirely, because a request cannot be built without it, and any CRL verdict
 // is reported with SignatureVerified false.
+// log is the caller's logger, or one that keeps nothing.
+func (c *RevocationChecker) log() *slog.Logger {
+	if c.Logger == nil {
+		return slog.New(slog.DiscardHandler)
+	}
+	return c.Logger
+}
+
 func (c *RevocationChecker) Check(ctx context.Context, leaf, issuer *x509.Certificate, staple []byte) *RevocationStatus {
 
 	status := &RevocationStatus{Status: ocspStatusUnknown}
@@ -196,10 +209,17 @@ func (c *RevocationChecker) Check(ctx context.Context, leaf, issuer *x509.Certif
 		return status
 	}
 	status.SerialNumber = formatSerialNumber(leaf.SerialNumber)
+	c.log().Debug("checking revocation",
+		slog.String("subject", leaf.Subject.CommonName),
+		slog.String("serial", status.SerialNumber),
+		slog.Bool("stapled", len(staple) > 0),
+		slog.Int("ocsp_responders", len(leaf.OCSPServer)),
+		slog.Int("crl_distribution_points", len(leaf.CRLDistributionPoints)))
 
 	// without an issuer nothing can be authenticated and OCSP cannot even be
 	// asked, so it is worth a request to go and get one
 	if issuer == nil {
+		c.log().Debug("issuer not presented, fetching it", slog.Any("from", leaf.IssuingCertificateURL))
 		fetched, from, err := c.fetchIssuer(ctx, leaf)
 		if err != nil {
 			status.Attempts = append(status.Attempts, RevocationAttempt{
@@ -208,6 +228,7 @@ func (c *RevocationChecker) Check(ctx context.Context, leaf, issuer *x509.Certif
 		} else {
 			issuer = fetched
 			status.IssuerFetchedFrom = from
+			c.log().Debug("issuer fetched", slog.String("from", from))
 		}
 	}
 
@@ -313,6 +334,8 @@ func (c *RevocationChecker) queryOCSP(ctx context.Context, leaf, issuer *x509.Ce
 		return nil, err
 	}
 
+	c.log().Debug("asking an OCSP responder", slog.String("responder", responder))
+
 	body, err := ocsp.CreateRequest(leaf, issuer, &ocsp.RequestOptions{Hash: crypto.SHA1})
 	if err != nil {
 		return nil, fmt.Errorf("build OCSP request: %w", err)
@@ -344,10 +367,13 @@ func (c *RevocationChecker) queryCRL(ctx context.Context, leaf, issuer *x509.Cer
 		return nil, err
 	}
 
+	c.log().Debug("reading a CRL", slog.String("distribution_point", point))
+
 	list, err := c.fetchCRL(ctx, point)
 	if err != nil {
 		return nil, err
 	}
+	c.log().Debug("CRL read", slog.String("distribution_point", point), slog.Int("revoked_certificates", len(list.RevokedCertificateEntries)))
 
 	var verified bool
 	if issuer != nil {
@@ -386,6 +412,10 @@ func (c *RevocationChecker) queryCRL(ctx context.Context, leaf, issuer *x509.Cer
 func (c *RevocationChecker) fetchCRL(ctx context.Context, point string) (*x509.RevocationList, error) {
 
 	return c.crlCache.get(point, func() (*x509.RevocationList, error) {
+		// only a miss reaches here, so a "reading" line without a
+		// "downloading" one after it is a list already held
+		c.log().Debug("downloading a CRL", slog.String("distribution_point", point))
+
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, point, nil)
 		if err != nil {
 			return nil, err

@@ -7,6 +7,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 )
 
@@ -51,6 +52,9 @@ func (c *RevocationChecker) downloadIssuer(ctx context.Context, leaf *x509.Certi
 	}
 
 	candidate, err := c.issuerCache.get(url, func() (*x509.Certificate, error) {
+		// only a miss reaches here
+		c.log().Debug("downloading an issuer", slog.String("url", url))
+
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {
 			return nil, err
