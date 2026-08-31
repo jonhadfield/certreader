@@ -7,9 +7,13 @@ on:
   # lets preflight be run on demand to validate setup without cutting a tag
   workflow_dispatch:
 
-# the repository default is read, and creating a release needs write
+# the repository default is read. Creating a release needs contents:write;
+# recording who built an artefact needs an OIDC identity to sign with and
+# somewhere to put the result.
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   preflight:
@@ -127,3 +131,22 @@ jobs:
         run: make ${{ matrix.target }}
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+      -
+        # the linux and windows targets build as root inside the container, so
+        # the archives come back owned by root and unreadable to the next step
+        name: take ownership of the archives
+        if: matrix.target != 'release-mac'
+        run: sudo chown -R "$(id -u):$(id -g)" dist
+      -
+        # Says which workflow, from which commit, built these. A checksum
+        # published beside the file it describes only shows the download was
+        # not corrupted: whoever could change one could change the other. This
+        # is verifiable against github rather than against the release:
+        #
+        #   gh attestation verify certreader_x.y.z_darwin_arm64.tar.gz --repo jonhadfield/certreader
+        name: attest the archives
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip

@@ -510,6 +510,17 @@ overridden with a flag.
 
  - [binary](https://github.com/jonhadfield/certreader/releases)
 
+Each archive carries a signed statement of which workflow built it, from which commit:
+
+```shell script
+gh attestation verify certreader_0.23.0_darwin_arm64.tar.gz --repo jonhadfield/certreader
+```
+
+The checksums published beside the archives say only that a download was not corrupted, since whoever
+could change one could change the other. This is checked against GitHub rather than against the
+release, and needs no key from anyone. It says the artefact came from this repository's release
+workflow; it does not say the source is good.
+
 ## build/install
 
 ### brew
