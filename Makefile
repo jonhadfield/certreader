@@ -14,6 +14,12 @@ lint:
 	golangci-lint run ./...
 .PHONY:lint
 
+# What the standard library and the dependencies are known to be wrong about,
+# and whether this code reaches any of it. CI runs it on every push.
+vuln:
+	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+.PHONY:vuln
+
 # the fixtures are only the cases somebody thought to write down; this puts the
 # same questions to every certificate in the machine's trust store
 corpus:
@@ -31,7 +37,6 @@ install: test
 # Reusable variables
 GORELEASER ?= goreleaser
 GITHUB_TOKEN ?= $(shell echo $$GITHUB_TOKEN)
-GO_VERSION := 1.22-bookworm
 
 release: release-linux-amd64 release-linux-arm64 release-mac release-windows-amd64 release-windows-arm64
 	@echo "✅ All artifacts uploaded to the same GitHub release."
