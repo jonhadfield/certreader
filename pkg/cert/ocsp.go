@@ -85,7 +85,7 @@ func parseOCSPResponse(raw []byte, leaf, issuer *x509.Certificate) (*StapledOCSP
 		SignatureVerified: issuer != nil,
 	}
 	if response.SerialNumber != nil {
-		out.SerialNumber = formatHexArray(response.SerialNumber.Bytes())
+		out.SerialNumber = formatSerialNumber(response.SerialNumber)
 	}
 	if response.Status == ocsp.Revoked {
 		out.RevokedAt = response.RevokedAt

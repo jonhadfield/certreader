@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -120,6 +121,54 @@ func TestCorpusJSONIsValid(t *testing.T) {
 			var document map[string]any
 			require.NoError(t, json.Unmarshal([]byte(out.String()), &document), "%s: json does not parse", file)
 			assert.Contains(t, document, "locations")
+		})
+	}
+}
+
+// The text and the json are separate code paths over the same certificate, so
+// they can drift. Where they disagree, at least one of them is wrong: a serial
+// of zero printed as an empty field in the text and was missing from the json
+// altogether, and comparing the two is what found it.
+func TestCorpusTextAndJSONAgree(t *testing.T) {
+	fields := map[string]string{
+		"Subject":             "subject",
+		"Issuer":              "issuer",
+		"Serial Number":       "serial_number",
+		"Signature Algorithm": "signature_algorithm",
+		"Type":                "type",
+	}
+
+	for _, file := range corpusFiles(t) {
+		t.Run(filepath.Base(file), func(t *testing.T) {
+			location := cert.LoadFromFile(file, "")
+			if location.Error != nil || !location.IsCertificate() {
+				t.Skipf("not readable as certificates: %v", location.Error)
+			}
+			// A file can be read while a certificate inside it is not: Go
+			// refuses a negative serial, for one, and there are such
+			// certificates in a system trust store. Both outputs then carry an
+			// error where the fields would be, which is the right answer and
+			// nothing to compare.
+			if err := location.Certificates[0].Error(); err != nil {
+				t.Skipf("certificate did not parse: %v", err)
+			}
+			locations := []cert.Location{location}
+
+			text := string(printed(t, func() { Locations(locations, Options{}) }))
+
+			var rendered strings.Builder
+			require.NoError(t, writeJSON(&rendered, locations, Options{}))
+
+			var document map[string]any
+			require.NoError(t, json.Unmarshal([]byte(rendered.String()), &document))
+			certificates := document["locations"].([]any)[0].(map[string]any)["certificates"].([]any)
+			first := certificates[0].(map[string]any)
+
+			for label, key := range fields {
+				line := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(label) + `: (.*)$`).FindStringSubmatch(text)
+				require.NotNil(t, line, "%s: no %s line in the text output", file, label)
+				assert.Equal(t, line[1], first[key], "%s: text and json disagree on %s", file, label)
+			}
 		})
 	}
 }
