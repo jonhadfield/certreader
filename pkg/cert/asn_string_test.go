@@ -119,3 +119,44 @@ func relativeNameWithValue(t *testing.T, value asn1.RawValue) []byte {
 
 	return set
 }
+
+func TestGeneralNamesKeepTheirOrder(t *testing.T) {
+	// The types were collected in a map and printed by ranging it, so Go's
+	// randomised order reached the output: two runs over the same certificate
+	// printed the same names in a different order. That defeats diffing one run
+	// against another, and golden output of any kind.
+	raw := csrExtensionValue(t, "csr_san.pem", "2.5.29.17")
+
+	first, err := ToGeneralNames(raw)
+	require.NoError(t, err)
+	require.Len(t, first, 2)
+
+	// the certificate lists its DNS names before its IP address, and so does
+	// openssl reading the same file
+	assert.Contains(t, first[0], "DNS Name")
+	assert.Contains(t, first[1], "IP Address")
+
+	// a map with two keys lands in the same order roughly half the time by
+	// chance, so once proves nothing
+	for i := 0; i < 50; i++ {
+		again, err := ToGeneralNames(raw)
+		require.NoError(t, err)
+		assert.Equal(t, first, again, "the same bytes have to give the same answer")
+	}
+}
+
+// csrExtensionValue reads an extension out of a certificate request fixture.
+// extensionValue reads certificates, and a request is not one.
+func csrExtensionValue(t *testing.T, file, oid string) []byte {
+	t.Helper()
+
+	for _, csr := range loadTestCSRs(t, file) {
+		for _, extension := range csr.x509CSR.Extensions {
+			if extension.Id.String() == oid {
+				return extension.Value
+			}
+		}
+	}
+	t.Fatalf("%s has no extension %s", file, oid)
+	return nil
+}

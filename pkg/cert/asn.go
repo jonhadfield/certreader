@@ -68,7 +68,13 @@ func ToGeneralNames(in []byte) ([]string, error) {
 	}
 	in = sequence.Bytes
 
+	// Values are grouped by type, and the types come out in the order the
+	// certificate first mentions them. Ranging the map instead meant Go's
+	// randomised order reached the output: two runs over the same certificate
+	// printed the same names in a different order, which defeats diffing one
+	// run against another.
 	names := make(map[string][]string)
+	var order []string
 	for {
 		var out asn1.RawValue
 		rest, err := asn1.Unmarshal(in, &out)
@@ -79,6 +85,7 @@ func ToGeneralNames(in []byte) ([]string, error) {
 		name := toGeneralName(out)
 		if _, ok := names[name.Type]; !ok {
 			names[name.Type] = []string{}
+			order = append(order, name.Type)
 		}
 		names[name.Type] = append(names[name.Type], name.Value)
 
@@ -89,8 +96,8 @@ func ToGeneralNames(in []byte) ([]string, error) {
 	}
 
 	var namesSlice []string
-	for k, v := range names {
-		namesSlice = append(namesSlice, fmt.Sprintf("%s: %s", k, strings.Join(v, ", ")))
+	for _, k := range order {
+		namesSlice = append(namesSlice, fmt.Sprintf("%s: %s", k, strings.Join(names[k], ", ")))
 	}
 	return namesSlice, nil
 }
