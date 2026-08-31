@@ -3,7 +3,6 @@ package print
 import (
 	"fmt"
 	"github.com/jonhadfield/certreader/pkg/cert"
-	"log/slog"
 	"strings"
 )
 
@@ -19,7 +18,6 @@ func printCSRs(csrs cert.CSRs, printPem, printExtensions, printSignature bool) {
 
 func printCSR(csr cert.CSR, printExtensions, printSignature bool) {
 	if csr.Error() != nil {
-		slog.Error(csr.Error().Error())
 		fmt.Println(csr.Error())
 		return
 	}

@@ -13,7 +13,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"log/slog"
 	"math/big"
 	"slices"
 	"strings"
@@ -505,8 +504,8 @@ func (c Certificate) Extensions() []Extension {
 	for _, v := range c.x509Certificate.Extensions {
 		name, value, err := parseExtension(v)
 		if err != nil {
-			// log error and set error as value
-			slog.Error(fmt.Sprintf("certificate at position %d: extension %s (%s): %v", c.position, name, v.Id.String(), err))
+			// the extension is reported in place of its value, which is where
+			// a reader is looking; announcing it as well says it twice
 			value = []string{err.Error()}
 		}
 		out = append(out, Extension{

@@ -2,7 +2,6 @@ package print
 
 import (
 	"fmt"
-	"log/slog"
 
 	"github.com/jonhadfield/certreader/pkg/cert"
 )
@@ -75,7 +74,6 @@ func printStapledOCSP(location cert.Location) {
 
 	staple, err := location.StapledOCSP()
 	if err != nil {
-		slog.Error(fmt.Sprintf("stapled OCSP for %s: %v", location.Name(), err))
 		fmt.Printf("%s: %v\n\n", AttributeName("OCSP Staple"), err)
 		return
 	}
