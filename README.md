@@ -198,6 +198,10 @@ appear on a chain that verifies perfectly well — so they do not change the res
 | `chain-out-of-order` | a certificate does not issue the one before it |
 | `leaf-not-first` | the first certificate sent is a CA, where the end-entity is expected |
 
+These describe what the server sent, so the display filters do not change them: `-no-duplicate`
+removes the duplicate from the output and `duplicate-certificate` is still reported, since the server
+sent it either way.
+
 ```
 Verification
     Result: verified
