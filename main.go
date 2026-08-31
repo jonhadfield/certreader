@@ -41,25 +41,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	locations := LoadLocations(flags)
-	if flags.NoExpired {
-		locations = locations.RemoveExpired()
-	}
-	if flags.NoDuplicate {
-		locations = locations.RemoveDuplicates()
-	}
-	if flags.SubjectLike != "" {
-		locations = locations.SubjectLike(flags.SubjectLike)
-	}
-	if flags.IssuerLike != "" {
-		locations = locations.IssuerLike(flags.IssuerLike)
-	}
-	if flags.SortExpiry {
-		locations = locations.SortByExpiry()
-	}
-	if flags.Verify {
-		locations = locations.Verify()
-	}
+	locations := verifyThenFilter(LoadLocations(flags), flags)
 	if flags.Revocation && revocationIsRendered(flags) {
 		ctx, cancel := context.WithTimeout(context.Background(), flags.Timeout*revocationBudgetMultiple)
 		checker := &cert.RevocationChecker{
@@ -115,6 +97,38 @@ func printOptions(flags Flags) print.Options {
 		Signature:   flags.Signature,
 		Fingerprint: flags.Fingerprint,
 	}
+}
+
+// verifyThenFilter judges what was read, then reduces it to what is to be
+// printed. The order is the point.
+//
+// Verification is a statement about what a server sent, so it has to happen
+// before anything is taken away. Filtering first let the filters decide what
+// the chain looked like: -no-duplicate removed the duplicates before anything
+// could report them, and -no-expired did the same for an expired certificate
+// in the chain. The check could not fire for the person most likely to want
+// it, and -fail-on-warning passed a server that was misconfigured.
+func verifyThenFilter(locations cert.Locations, flags Flags) cert.Locations {
+	if flags.Verify {
+		locations = locations.Verify()
+	}
+
+	if flags.NoExpired {
+		locations = locations.RemoveExpired()
+	}
+	if flags.NoDuplicate {
+		locations = locations.RemoveDuplicates()
+	}
+	if flags.SubjectLike != "" {
+		locations = locations.SubjectLike(flags.SubjectLike)
+	}
+	if flags.IssuerLike != "" {
+		locations = locations.IssuerLike(flags.IssuerLike)
+	}
+	if flags.SortExpiry {
+		locations = locations.SortByExpiry()
+	}
+	return locations
 }
 
 func LoadLocations(flags Flags) cert.Locations {
