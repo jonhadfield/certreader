@@ -1,6 +1,6 @@
 module github.com/jonhadfield/certreader
 
-go 1.25.0
+go 1.25.14
 
 require github.com/stretchr/testify v1.11.1
 
@@ -9,7 +9,7 @@ require (
 	golang.design/x/clipboard v0.7.0
 	golang.org/x/crypto v0.55.0
 	golang.org/x/term v0.45.0
-	software.sslmate.com/src/go-pkcs12 v0.6.0
+	software.sslmate.com/src/go-pkcs12 v0.7.3
 )
 
 require (

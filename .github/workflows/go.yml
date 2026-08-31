@@ -43,6 +43,14 @@ jobs:
         uses: golangci/golangci-lint-action@v8
         with:
           version: v2.13.2
+      -
+        # trivy reads the dependency manifests; it does not tell us which go
+        # patch the binaries are built with, and every standard library
+        # advisory this tool reaches lives there
+        name: govulncheck
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version-file: go.mod
   scan:
     runs-on: ubuntu-latest
     steps:
