@@ -5,6 +5,8 @@ import (
 	"context"
 	"crypto/x509"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -89,4 +91,72 @@ func TestCRLCacheShowsInTheTrace(t *testing.T) {
 	})
 
 	assert.Equal(t, 1, strings.Count(out.String(), "downloading a CRL"), "the second call is served from the cache")
+}
+
+// redirectingServer sends the first request somewhere else, and records what
+// each of its two addresses was asked for.
+func redirectingServer(t *testing.T) (start string, reached *[]string) {
+	t.Helper()
+
+	var asked []string
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked = append(asked, "target"+r.URL.Path)
+		_, _ = w.Write([]byte("not a crl, but reaching here is the point"))
+	}))
+	t.Cleanup(target.Close)
+
+	from := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked = append(asked, "start"+r.URL.Path)
+		http.Redirect(w, r, target.URL+"/elsewhere", http.StatusFound)
+	}))
+	t.Cleanup(from.Close)
+
+	return from.URL + "/list.crl", &asked
+}
+
+func TestRedirectsAreNotFollowedByDefault(t *testing.T) {
+	t.Run("given a redirect, then the second address is never asked", func(t *testing.T) {
+		// The address came out of a certificate. Being sent from there to a
+		// second address is a request nobody reading the certificate asked for,
+		// and it can reach somewhere the certificate has no business naming.
+		start, asked := redirectingServer(t)
+		checker := &RevocationChecker{}
+
+		_, err := checker.fetchCRL(context.Background(), start)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not where the certificate said")
+		assert.Contains(t, err.Error(), "-follow-redirects")
+		assert.Equal(t, []string{"start/list.crl"}, *asked, "only the address named was asked")
+	})
+
+	t.Run("given the flag, then it is followed and each hop is traced", func(t *testing.T) {
+		start, asked := redirectingServer(t)
+		logger, out := traced()
+		checker := &RevocationChecker{FollowRedirects: true, Logger: logger}
+
+		// it fails to parse, which is fine: reaching the second address is what
+		// is being tested
+		_, _ = checker.fetchCRL(context.Background(), start)
+
+		assert.Equal(t, []string{"start/list.crl", "target/elsewhere"}, *asked)
+		assert.Contains(t, out.String(), "following a redirect")
+	})
+}
+
+func TestRedirectChainIsCapped(t *testing.T) {
+	var server *httptest.Server
+	var hops int
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hops++
+		http.Redirect(w, r, server.URL+"/again", http.StatusFound)
+	}))
+	t.Cleanup(server.Close)
+
+	checker := &RevocationChecker{FollowRedirects: true}
+	_, err := checker.fetchCRL(context.Background(), server.URL+"/start")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "redirected more than")
+	assert.LessOrEqual(t, hops, maxRedirects+1, "the chain stops rather than running to Go's ten")
 }

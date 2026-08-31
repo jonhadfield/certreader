@@ -40,21 +40,22 @@ type Flags struct {
 	FailOnWarning bool
 	// Concurrency bounds how many locations are read at once. Zero means no
 	// bound.
-	Concurrency int
-	Chains      bool
-	Compare     bool
-	Fingerprint bool
-	Extensions  bool
-	Signature   bool
-	Pem         bool
-	PemOnly     bool
-	JSON        bool
-	Verbose     bool
-	Version     bool
-	More        bool
-	Clipboard   bool
-	PfxPassword string
-	Args        []string
+	Concurrency     int
+	Chains          bool
+	Compare         bool
+	FollowRedirects bool
+	Fingerprint     bool
+	Extensions      bool
+	Signature       bool
+	Pem             bool
+	PemOnly         bool
+	JSON            bool
+	Verbose         bool
+	Version         bool
+	More            bool
+	Clipboard       bool
+	PfxPassword     string
+	Args            []string
 }
 
 func ParseFlags() (Flags, error) {
@@ -94,6 +95,8 @@ func ParseFlags() (Flags, error) {
 		"exit non-zero if any certificate or chain warning is reported")
 	flagSet.BoolVar(&flags.Verify, "verify", getBoolEnv("CERTREADER_VERIFY", false),
 		"verify against the system trust store and report why it fails")
+	flagSet.BoolVar(&flags.FollowRedirects, "follow-redirects", getBoolEnv("CERTREADER_FOLLOW_REDIRECTS", false),
+		"allow a revocation or issuer request to be redirected away from the address the certificate named")
 	flagSet.BoolVar(&flags.Compare, "compare", getBoolEnv("CERTREADER_COMPARE", false),
 		"compare two locations and report whether they serve the same certificate")
 	flagSet.BoolVar(&flags.Fingerprint, "fingerprint", getBoolEnv("CERTREADER_FINGERPRINT", false),
