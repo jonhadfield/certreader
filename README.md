@@ -614,7 +614,7 @@ fixtures on every test run.
 
 Releases are built and published with [GoReleaser](https://goreleaser.com) from a tagged commit.
 Pushing the tag is all that is needed — the `release` workflow builds every platform and uploads the
-artifacts to a single GitHub release, then updates the homebrew cask.
+artifacts to a single GitHub release, then updates the homebrew formula.
 
 ```shell script
 git tag -a -m "add super cool feature" v1.0.0

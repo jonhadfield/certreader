@@ -31,7 +31,7 @@ jobs:
           RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
           if [ -z "$RELEASE_TOKEN" ]; then
-            echo "::error::RELEASE_TOKEN secret is not set. Releases need a personal access token with repo scope on both jonhadfield/certreader and jonhadfield/homebrew-certreader, because the darwin build pushes the cask update to the tap and the built-in GITHUB_TOKEN cannot write to another repository."
+            echo "::error::RELEASE_TOKEN secret is not set. Releases need a personal access token with repo scope on both jonhadfield/certreader and jonhadfield/homebrew-certreader, because the darwin build pushes the formula update to the tap and the built-in GITHUB_TOKEN cannot write to another repository."
             exit 1
           fi
           echo "RELEASE_TOKEN is configured"
