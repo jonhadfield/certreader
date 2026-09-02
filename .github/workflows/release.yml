@@ -51,7 +51,7 @@ jobs:
           missing=""
           present=""
           for name in MACOS_SIGN_P12 MACOS_SIGN_PASSWORD MACOS_NOTARY_ISSUER_ID MACOS_NOTARY_KEY_ID MACOS_NOTARY_KEY; do
-            eval "value=\$$name"
+            value="${!name}"
             if [ -z "$value" ]; then
               missing="$missing $name"
             else
@@ -85,7 +85,11 @@ jobs:
               continue
             fi
             echo "$out"
-            if echo "$out" | grep -q "configuration is valid, but uses deprecated properties"; then
+            # matched on goreleaser saying DEPRECATED and not saying the
+            # configuration is invalid, rather than on one exact sentence. If
+            # the wording changes past recognising, this fails the release
+            # rather than waving something through.
+            if echo "$out" | grep -q "DEPRECATED" && ! echo "$out" | grep -q "configuration is invalid"; then
               echo "::warning::$config uses deprecated goreleaser properties, tolerated because the replacement quarantines what it installs"
               continue
             fi
@@ -175,13 +179,13 @@ jobs:
         run: make ${{ matrix.target }}
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-          # only the darwin target reads these; the others are built in a
-          # container that never sees them
-          MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
-          MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
-          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
-          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
-          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+          # only the darwin target signs, so only that job is given the
+          # credentials to do it with
+          MACOS_SIGN_P12: ${{ matrix.target == 'release-mac' && secrets.MACOS_SIGN_P12 || '' }}
+          MACOS_SIGN_PASSWORD: ${{ matrix.target == 'release-mac' && secrets.MACOS_SIGN_PASSWORD || '' }}
+          MACOS_NOTARY_ISSUER_ID: ${{ matrix.target == 'release-mac' && secrets.MACOS_NOTARY_ISSUER_ID || '' }}
+          MACOS_NOTARY_KEY_ID: ${{ matrix.target == 'release-mac' && secrets.MACOS_NOTARY_KEY_ID || '' }}
+          MACOS_NOTARY_KEY: ${{ matrix.target == 'release-mac' && secrets.MACOS_NOTARY_KEY || '' }}
       -
         # the linux and windows targets build as root inside the container, so
         # the archives come back owned by root and unreadable to the next step

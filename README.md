@@ -631,7 +631,7 @@ Release notes come from the annotated tag message, so write the tag with the not
 
 The workflow needs a `RELEASE_TOKEN` repository secret: a personal access token with `repo` scope on
 both `jonhadfield/certreader` and `jonhadfield/homebrew-certreader`. The token built into Actions
-cannot write to another repository, and the darwin build pushes the cask update to the tap.
+cannot write to another repository, and the darwin build pushes the formula update to the tap.
 
 Signing the darwin binaries is optional, and off unless all five of these are set. It is not what
 makes an install work — the formula is, see [why a formula and not a cask](#why-a-formula-and-not-a-cask)
