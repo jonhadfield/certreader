@@ -36,6 +36,37 @@ jobs:
           fi
           echo "RELEASE_TOKEN is configured"
       -
+        # Signing is optional: what makes a homebrew install run is shipping a
+        # formula rather than a cask, since a cask quarantines what it installs.
+        # Half-configured is worth saying out loud though, because goreleaser
+        # silently skips signing when the certificate is absent.
+        name: check macos signing credentials
+        env:
+          MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
+          MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+        run: |
+          missing=""
+          present=""
+          for name in MACOS_SIGN_P12 MACOS_SIGN_PASSWORD MACOS_NOTARY_ISSUER_ID MACOS_NOTARY_KEY_ID MACOS_NOTARY_KEY; do
+            value="${!name}"
+            if [ -z "$value" ]; then
+              missing="$missing $name"
+            else
+              present="$present $name"
+            fi
+          done
+          if [ -z "$present" ]; then
+            echo "the darwin binaries will not be signed, which is supported: see the release section of the README"
+          elif [ -n "$missing" ]; then
+            echo "::error::macos signing is half configured, missing:$missing. goreleaser skips signing entirely when the certificate is absent, so set all five or none of them."
+            exit 1
+          else
+            echo "macos signing credentials are configured"
+          fi
+      -
         name: install goreleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -45,7 +76,24 @@ jobs:
         run: |
           for config in .goreleaser/.goreleaser.*.yml; do
             echo "checking $config"
-            goreleaser check --config "$config"
+            # `brews` is deprecated in favour of homebrew_casks, which is not
+            # usable here: a cask quarantines what it installs and the binary
+            # is then killed. goreleaser fails the check for a deprecation as
+            # well as for a mistake, so let its own wording tell them apart.
+            if out="$(goreleaser check --config "$config" 2>&1)"; then
+              echo "$out"
+              continue
+            fi
+            echo "$out"
+            # matched on goreleaser saying DEPRECATED and not saying the
+            # configuration is invalid, rather than on one exact sentence. If
+            # the wording changes past recognising, this fails the release
+            # rather than waving something through.
+            if echo "$out" | grep -q "DEPRECATED" && ! echo "$out" | grep -q "configuration is invalid"; then
+              echo "::warning::$config uses deprecated goreleaser properties, tolerated because the replacement quarantines what it installs"
+              continue
+            fi
+            exit 1
           done
       -
         # created once here so the platform jobs can upload in parallel. Left to
@@ -131,6 +179,13 @@ jobs:
         run: make ${{ matrix.target }}
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          # only the darwin target signs, so only that job is given the
+          # credentials to do it with
+          MACOS_SIGN_P12: ${{ matrix.target == 'release-mac' && secrets.MACOS_SIGN_P12 || '' }}
+          MACOS_SIGN_PASSWORD: ${{ matrix.target == 'release-mac' && secrets.MACOS_SIGN_PASSWORD || '' }}
+          MACOS_NOTARY_ISSUER_ID: ${{ matrix.target == 'release-mac' && secrets.MACOS_NOTARY_ISSUER_ID || '' }}
+          MACOS_NOTARY_KEY_ID: ${{ matrix.target == 'release-mac' && secrets.MACOS_NOTARY_KEY_ID || '' }}
+          MACOS_NOTARY_KEY: ${{ matrix.target == 'release-mac' && secrets.MACOS_NOTARY_KEY || '' }}
       -
         # the linux and windows targets build as root inside the container, so
         # the archives come back owned by root and unreadable to the next step

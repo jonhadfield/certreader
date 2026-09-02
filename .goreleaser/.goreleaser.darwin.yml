@@ -34,22 +34,53 @@ archives:
     formats:
       - tar.gz
 
+# Signing the binaries with a Developer ID certificate, for anyone who would
+# rather have it than not. It is off unless the certificate is configured, and
+# it is not what makes a homebrew install run: a bare binary has nowhere to
+# staple a notarization ticket, and on macos 26 an unstapled ticket did not
+# satisfy gatekeeper for a quarantined binary in testing. What fixes that is the
+# brews block below, by not being quarantined in the first place.
+notarize:
+  macos:
+    - enabled: '{{ isEnvSet "MACOS_SIGN_P12" }}'
+      ids:
+        - darwin-arm64
+        - darwin-amd64
+      sign:
+        certificate: "{{ .Env.MACOS_SIGN_P12 }}"
+        password: "{{ .Env.MACOS_SIGN_PASSWORD }}"
+      notarize:
+        issuer_id: "{{ .Env.MACOS_NOTARY_ISSUER_ID }}"
+        key_id: "{{ .Env.MACOS_NOTARY_KEY_ID }}"
+        key: "{{ .Env.MACOS_NOTARY_KEY }}"
+        # the archives are uploaded from this same run, so the binaries they
+        # carry must be signed and accepted before it moves on
+        wait: true
+        timeout: 20m
+
 checksum:
   name_template: "checksums_darwin.txt"
 
-homebrew_casks:
+# A formula rather than a cask, because homebrew marks what a cask installs
+# com.apple.quarantine and gatekeeper then kills a bare binary that carries no
+# stapled notarization ticket, which a bare binary has nowhere to keep. A
+# formula is not quarantined, which is how every other go command line tool in
+# homebrew arrives able to run.
+#
+# goreleaser calls this deprecated in favour of homebrew_casks. The cask is what
+# certreader used until it turned out not to run when installed, so this stays
+# until there is somewhere to staple a ticket to.
+brews:
   - name: certreader
     # IMPORTANT: these are *archive* IDs, not build IDs:
     ids:
       - darwin
-    binaries:
-      - certreader
     homepage: https://github.com/jonhadfield/certreader
     description: Output detailed information about TLS certificates...
-    commit_msg_template: "Brew cask update for {{ .ProjectName }} {{ .Tag }}"
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} {{ .Tag }}"
     # a prerelease must not become what brew installs
     skip_upload: "auto"
-    directory: Casks
+    directory: Formula
     repository:
       owner: jonhadfield
       name: homebrew-certreader
