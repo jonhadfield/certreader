@@ -565,6 +565,8 @@ workflow; it does not say the source is good.
 
 ### brew
 
+#### a fresh install
+
 ```shell script
 brew tap jonhadfield/certreader
 brew trust jonhadfield/certreader
@@ -573,6 +575,8 @@ brew install certreader
 
 Homebrew 6 refuses to load anything from a third-party tap until the tap is trusted, so `brew trust`
 comes before the install rather than after it fails.
+
+#### replacing the cask
 
 certreader was a cask until v0.24.0 and is a formula from v0.25.0. If you installed the cask, replace
 it once:
