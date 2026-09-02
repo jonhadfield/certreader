@@ -621,11 +621,11 @@ git tag -a -m "add super cool feature" v1.0.0
 git push --follow-tags
 ```
 
-### required secrets
+### required secret
 
 Platform builds run in parallel, so a release takes about as long as its slowest target rather than
 the sum of all five. A prerelease tag (one containing a hyphen, such as `v1.0.0-rc1`) is published as
-a prerelease and does not update the homebrew cask.
+a prerelease and does not update the homebrew formula.
 
 Release notes come from the annotated tag message, so write the tag with the notes you want.
 
@@ -633,28 +633,9 @@ The workflow needs a `RELEASE_TOKEN` repository secret: a personal access token 
 both `jonhadfield/certreader` and `jonhadfield/homebrew-certreader`. The token built into Actions
 cannot write to another repository, and the darwin build pushes the formula update to the tap.
 
-Signing the darwin binaries is optional, and off unless all five of these are set. It is not what
-makes an install work — the formula is, see [why a formula and not a cask](#why-a-formula-and-not-a-cask)
-— so treat it as something to have rather than something to fix:
+Without it the workflow stops at its preflight job and publishes nothing.
 
-| secret | what it is |
-| --- | --- |
-| `MACOS_SIGN_P12` | base64 of the Developer ID Application certificate, exported as `.p12` |
-| `MACOS_SIGN_PASSWORD` | the password that `.p12` was exported with |
-| `MACOS_NOTARY_KEY` | base64 of an App Store Connect `.p8` key |
-| `MACOS_NOTARY_KEY_ID` | that key's id, also in its filename |
-| `MACOS_NOTARY_ISSUER_ID` | the issuer uuid shown when the key was created |
-
-```shell script
-gh secret set MACOS_SIGN_P12 --repo jonhadfield/certreader < <(base64 -i DeveloperID.p12)
-gh secret set MACOS_NOTARY_KEY --repo jonhadfield/certreader < <(base64 -i AuthKey_XXXXXXXXXX.p8)
-```
-
-Without `RELEASE_TOKEN` the workflow stops at its preflight job and publishes nothing. The signing
-secrets are all-or-nothing: GoReleaser skips signing entirely when the certificate is absent, so
-preflight fails a half-configured set rather than letting it publish quietly unsigned.
-
-Run the workflow manually from the Actions tab to check the secrets and the GoReleaser configs
+Run the workflow manually from the Actions tab to check the secret and the GoReleaser configs
 without cutting a tag; a manual run stops after preflight.
 
 ### why a formula and not a cask
@@ -670,8 +651,9 @@ $ echo $?
 ```
 
 A bare executable has nowhere to keep a ticket — `stapler` needs an app bundle, a disk image or an
-installer package — so signing and notarizing the binary does not settle it. On macOS 26 a notarized
-but unstapled binary was still refused in testing.
+installer package — so signing and notarizing the binary does not settle it. On macOS 26.5 a binary
+signed with a Developer ID certificate and accepted by the notary service was still refused under
+quarantine, on every attempt within ten minutes of the ticket being issued.
 
 A **formula** is not quarantined, which is how every other Go command line tool in Homebrew arrives
 able to run. GoReleaser calls `brews` deprecated in favour of `homebrew_casks`; the cask is what
