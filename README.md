@@ -468,7 +468,8 @@ need them, and simultaneous checks share the one fetch rather than each starting
 from a public CA can be tens of megabytes, so scanning many hosts behind one authority would
 otherwise download the same file once per host.
 
-Requests honour `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`. Each request is bounded by a 10 second timeout, the whole
+Requests honour `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`, as the connection to the host itself does
+(see [proxies](#proxies)). Each request is bounded by a 10 second timeout, the whole
 check by 30 seconds, and response bodies by 32MB. Revocation is checked only for the default output, not for `-expiry`
 or `-pem-only`.
 
@@ -485,6 +486,45 @@ they became configurable.
 ```shell script
 certreader -timeout 30s -revocation slow.example.com:443
 ```
+
+## proxies
+
+A connection to a host goes through the proxy named by `HTTPS_PROXY` (or `https_proxy`), opened with
+an HTTP `CONNECT` tunnel. The handshake then runs end to end with the target through that tunnel, so
+the certificates reported are the target's own and SNI still names the target rather than the proxy.
+
+```shell script
+HTTPS_PROXY=http://proxy.example.com:3128 certreader example.com:443
+```
+
+`NO_PROXY` (or `no_proxy`) excludes addresses, following the same rules as go's own client: `*`
+excludes everything, and an entry may name a host, a domain suffix, an IP address or a CIDR block,
+optionally with a port that must match as well. `localhost` and loopback addresses are never proxied,
+whether or not they are listed.
+
+The proxy address may be written as a URL or as a bare `host:port`, which means `http`. Credentials
+in the URL are offered as `Proxy-Authorization: Basic`, and are not printed by `-verbose`, which
+otherwise names the proxy each connection used.
+
+```shell script
+HTTPS_PROXY=http://someone:s3cret@proxy.example.com:3128 certreader -verbose example.com:443
+NO_PROXY=.internal.example.com,10.0.0.0/8 certreader host.internal.example.com:443
+```
+
+An `https://` proxy is spoken to over TLS, so the `CONNECT` exchange is itself encrypted; the tunnel
+it opens still carries a separate handshake with the target. `-insecure` then applies to that hop as
+well, since it is the same instruction not to verify, one hop earlier. A `socks5://` or other scheme
+is rejected rather than ignored.
+
+`-starttls` is tunnelled the same way, so the plaintext negotiation is with the target and not with
+the proxy.
+
+A proxy that terminates TLS rather than tunnelling it will present its own certificate, and that is
+what will be reported — which is the honest answer, but worth knowing before reading it as the
+target's.
+
+Revocation and issuer requests are ordinary HTTP, and honour `HTTP_PROXY` as well; see
+[revocation](#revocation).
 
 ## concurrency
 
