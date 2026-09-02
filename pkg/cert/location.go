@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/url"
 	"os"
 	"slices"
 	"time"
@@ -283,19 +284,27 @@ func LoadFromNetwork(addr string, opts NetworkOptions) Location {
 		ServerName:         opts.ServerName,
 	}
 
+	proxy, err := proxyForAddress(addr)
+	if err != nil {
+		return Location{Path: addr, Error: err}
+	}
+
 	started := time.Now()
 	opts.log().Debug("connecting",
 		slog.String("address", addr),
 		slog.String("starttls", string(opts.StartTLS)),
 		slog.Duration("timeout", opts.timeout()),
+		slog.String("proxy", proxyName(proxy)),
 		slog.String("server_name", config.ServerName))
 
 	var conn *tls.Conn
-	var err error
-	if opts.StartTLS == StartTLSNone {
+	switch {
+	case opts.StartTLS != StartTLSNone:
+		conn, err = dialStartTLS(addr, config, opts.StartTLS, opts.timeout(), proxy)
+	case proxy != nil:
+		conn, err = dialThroughProxy(addr, config, opts.timeout(), proxy)
+	default:
 		conn, err = tls.DialWithDialer(&net.Dialer{Timeout: opts.timeout()}, "tcp", addr, config)
-	} else {
-		conn, err = dialStartTLS(addr, config, opts.StartTLS, opts.timeout())
 	}
 	if err != nil {
 		opts.log().Debug("connection failed", slog.String("address", addr), slog.Duration("after", time.Since(started)), slog.Any("err", err))
@@ -323,10 +332,11 @@ func LoadFromNetwork(addr string, opts NetworkOptions) Location {
 }
 
 // dialStartTLS connects in plaintext, asks the server to begin TLS, and then
-// completes the handshake over the same connection.
-func dialStartTLS(addr string, config *tls.Config, protocol StartTLSProtocol, timeout time.Duration) (*tls.Conn, error) {
+// completes the handshake over the same connection. A non nil proxy is
+// tunnelled through first, so the plaintext exchange is with the target.
+func dialStartTLS(addr string, config *tls.Config, protocol StartTLSProtocol, timeout time.Duration, proxy *url.URL) (*tls.Conn, error) {
 
-	raw, err := net.DialTimeout("tcp", addr, timeout)
+	raw, err := dialRaw(addr, config, proxy, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -343,6 +353,56 @@ func dialStartTLS(addr string, config *tls.Config, protocol StartTLSProtocol, ti
 		return nil, err
 	}
 
+	conn, err := clientHandshake(raw, addr, config)
+	if err != nil {
+		return nil, err
+	}
+	if err := raw.SetDeadline(time.Time{}); err != nil {
+		_ = raw.Close()
+		return nil, err
+	}
+	return conn, nil
+}
+
+// dialThroughProxy reaches the target through an http proxy and handshakes with
+// it over the tunnel, which is what a direct tls.Dial would have done over a
+// socket of its own.
+func dialThroughProxy(addr string, config *tls.Config, timeout time.Duration, proxy *url.URL) (*tls.Conn, error) {
+
+	raw, err := dialRaw(addr, config, proxy, timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := raw.SetDeadline(time.Now().Add(timeout)); err != nil {
+		_ = raw.Close()
+		return nil, err
+	}
+
+	conn, err := clientHandshake(raw, addr, config)
+	if err != nil {
+		return nil, err
+	}
+	if err := raw.SetDeadline(time.Time{}); err != nil {
+		_ = raw.Close()
+		return nil, err
+	}
+	return conn, nil
+}
+
+// dialRaw opens the connection the handshake will run over, tunnelling through
+// the proxy when one was named.
+func dialRaw(addr string, config *tls.Config, proxy *url.URL, timeout time.Duration) (net.Conn, error) {
+	if proxy == nil {
+		return net.DialTimeout("tcp", addr, timeout)
+	}
+	return dialProxyTunnel(addr, proxy, timeout, config.InsecureSkipVerify)
+}
+
+// clientHandshake completes the tls handshake over a connection that is already
+// carrying bytes to the target, closing it if the handshake fails.
+func clientHandshake(raw net.Conn, addr string, config *tls.Config) (*tls.Conn, error) {
+
 	// tls.Dial infers this from the address, tls.Client does not
 	if config.ServerName == "" {
 		host, _, splitErr := net.SplitHostPort(addr)
@@ -353,10 +413,6 @@ func dialStartTLS(addr string, config *tls.Config, protocol StartTLSProtocol, ti
 
 	conn := tls.Client(raw, config)
 	if err := conn.Handshake(); err != nil {
-		_ = raw.Close()
-		return nil, err
-	}
-	if err := raw.SetDeadline(time.Time{}); err != nil {
 		_ = raw.Close()
 		return nil, err
 	}
