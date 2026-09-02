@@ -87,6 +87,61 @@ func serveTunnel(client net.Conn, backend string, refuse string, recorded chan<-
 	<-done
 }
 
+// startGreetingTunnelProxy opens the tunnel and sends the target's greeting in
+// the same write as the CONNECT response, which is what a proxy in front of a
+// server that speaks first may do. The greeting is then in the client's buffer
+// before anything asks for it, which is the case a timing race would otherwise
+// only sometimes produce.
+func startGreetingTunnelProxy(t *testing.T, backend string) string {
+	t.Helper()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = listener.Close() })
+
+	go func() {
+		client, acceptErr := listener.Accept()
+		if acceptErr != nil {
+			return
+		}
+		defer client.Close()
+		_ = client.SetDeadline(time.Now().Add(10 * time.Second))
+
+		reader := bufio.NewReader(client)
+		if _, err = http.ReadRequest(reader); err != nil {
+			return
+		}
+
+		server, dialErr := net.Dial("tcp", backend)
+		if dialErr != nil {
+			return
+		}
+		defer server.Close()
+		_ = server.SetDeadline(time.Now().Add(10 * time.Second))
+
+		greeting := make([]byte, 512)
+		read, readErr := server.Read(greeting)
+		if readErr != nil {
+			return
+		}
+
+		response := append([]byte("HTTP/1.1 200 Connection established\r\n\r\n"), greeting[:read]...)
+		if _, err = client.Write(response); err != nil {
+			return
+		}
+
+		done := make(chan struct{})
+		go func() {
+			_, _ = io.Copy(server, reader)
+			close(done)
+		}()
+		_, _ = io.Copy(client, server)
+		<-done
+	}()
+
+	return listener.Addr().String()
+}
+
 // startTLSTunnelProxy runs the same proxy behind tls, which is what an
 // https:// proxy url names: the CONNECT exchange itself is encrypted.
 func startTLSTunnelProxy(t *testing.T, backend string) (string, <-chan recordedConnect) {
@@ -215,6 +270,17 @@ func TestLoadFromNetworkThroughProxy(t *testing.T) {
 		assert.Equal(t, "mail.example.test:587", (<-connects).target)
 	})
 
+	t.Run("given the greeting arrives with the connect response then the negotiation still sees it", func(t *testing.T) {
+		backend := startPlaintextServer(t, smtpExchange)
+		proxy := startGreetingTunnelProxy(t, backend)
+		t.Setenv("HTTPS_PROXY", "http://"+proxy)
+
+		location := LoadFromNetwork("mail.example.test:587", NetworkOptions{InsecureSkipVerify: true, StartTLS: StartTLSSMTP})
+
+		require.NoError(t, location.Error)
+		require.Len(t, location.Certificates, 1)
+	})
+
 	t.Run("given NO_PROXY covers the address then the proxy is not used", func(t *testing.T) {
 		// a proxy that opens the tunnel to a working backend, so reaching it
 		// would succeed and only a direct connection can fail
@@ -326,6 +392,11 @@ func TestParseProxyURL(t *testing.T) {
 		{name: "a bare host and port, which means http", value: "proxy.example.com:3128", host: "proxy.example.com:3128"},
 		{name: "a bare address without a port", value: "proxy.example.com", host: "proxy.example.com"},
 		{name: "an unsupported scheme", value: "socks5://proxy.example.com:1080", error: "unsupported proxy scheme"},
+		{name: "a scheme and nothing else", value: "http://", error: "expected a host"},
+		{name: "an https scheme and nothing else", value: "https://", error: "expected a host"},
+		{name: "a port with no host", value: "http://:3128", error: "expected a host"},
+		{name: "a separator with no scheme", value: "://proxy.example.com:3128", error: "invalid proxy address"},
+		{name: "nothing at all", value: "", error: "expected a host"},
 	}
 
 	for _, test := range tests {

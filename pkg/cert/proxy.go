@@ -43,18 +43,32 @@ func firstEnv(names ...string) string {
 
 // parseProxyURL reads the value of a proxy environment variable. A bare
 // host:port is accepted, and means http, as it does for go's own http client.
+//
+// A value that names a scheme is held to being a whole url, rather than being
+// retried as a bare address: "http://" read that way yields the host "http:",
+// which is not what anyone who wrote it meant, and is better refused than
+// dialled.
 func parseProxyURL(value string) (*url.URL, error) {
 
-	proxy, err := url.Parse(value)
-	if err != nil || proxy.Host == "" || proxy.Scheme == "" {
-		// a value such as "proxy.example.com:3128" carries no scheme, and
-		// parses as one rather than as a host
-		if bare, bareErr := url.Parse("http://" + value); bareErr == nil && bare.Host != "" {
-			return bare, nil
+	if !strings.Contains(value, "://") {
+		// a value such as "proxy.example.com:3128" parses as a scheme rather
+		// than as a host, so it is read as the address it plainly is
+		bare, err := url.Parse("http://" + value)
+		if err != nil {
+			return nil, fmt.Errorf("invalid proxy address %q: %w", value, err)
 		}
+		if bare.Hostname() == "" {
+			return nil, fmt.Errorf("invalid proxy address %q, expected a host", value)
+		}
+		return bare, nil
 	}
+
+	proxy, err := url.Parse(value)
 	if err != nil {
 		return nil, fmt.Errorf("invalid proxy address %q: %w", value, err)
+	}
+	if proxy.Hostname() == "" {
+		return nil, fmt.Errorf("invalid proxy address %q, expected a host", value)
 	}
 
 	switch proxy.Scheme {
@@ -169,7 +183,8 @@ func dialProxyTunnel(addr string, proxy *url.URL, timeout time.Duration, insecur
 		conn = tlsConn
 	}
 
-	if err = proxyConnect(conn, addr, proxy); err != nil {
+	reader, err := proxyConnect(conn, addr, proxy)
+	if err != nil {
 		_ = conn.Close()
 		return nil, err
 	}
@@ -177,7 +192,22 @@ func dialProxyTunnel(addr string, proxy *url.URL, timeout time.Duration, insecur
 		_ = conn.Close()
 		return nil, err
 	}
-	return conn, nil
+	return &proxyConn{Conn: conn, reader: reader}, nil
+}
+
+// proxyConn carries whatever was read past the end of the CONNECT response.
+//
+// A target that speaks first, as smtp and imap do, can have its greeting
+// arrive on the heels of the response and land in the same buffer. Reading the
+// connection directly after that would lose it, and the negotiation would then
+// wait for a greeting that had already been sent.
+type proxyConn struct {
+	net.Conn
+	reader *bufio.Reader
+}
+
+func (c *proxyConn) Read(b []byte) (int, error) {
+	return c.reader.Read(b)
 }
 
 // proxyAddress is the address to dial the proxy on, defaulting the port to the
@@ -193,10 +223,13 @@ func proxyAddress(proxy *url.URL) string {
 	return net.JoinHostPort(proxy.Hostname(), port)
 }
 
-// proxyConnect asks for the tunnel and waits for the proxy to say it is open.
+// proxyConnect asks for the tunnel and waits for the proxy to say it is open,
+// returning the buffer the answer was read through, since the target's own
+// first bytes may already be sitting in it.
+//
 // The request is written to the connection rather than issued through a client,
-// because what follows on it is a tls handshake and not more http.
-func proxyConnect(conn net.Conn, addr string, proxy *url.URL) error {
+// because what follows on it belongs to the target and is not more http.
+func proxyConnect(conn net.Conn, addr string, proxy *url.URL) (*bufio.Reader, error) {
 
 	request := &http.Request{
 		Method: http.MethodConnect,
@@ -211,26 +244,20 @@ func proxyConnect(conn net.Conn, addr string, proxy *url.URL) error {
 	}
 
 	if err := request.Write(conn); err != nil {
-		return fmt.Errorf("sending CONNECT to proxy %s: %w", proxy.Host, err)
+		return nil, fmt.Errorf("sending CONNECT to proxy %s: %w", proxy.Host, err)
 	}
 
 	reader := bufio.NewReader(conn)
 	response, err := http.ReadResponse(reader, request)
 	if err != nil {
-		return fmt.Errorf("reading the CONNECT response from proxy %s: %w", proxy.Host, err)
+		return nil, fmt.Errorf("reading the CONNECT response from proxy %s: %w", proxy.Host, err)
 	}
 	defer func() { _ = response.Body.Close() }()
 
 	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("proxy %s refused to connect to %s: %s", proxy.Host, addr, response.Status)
+		return nil, fmt.Errorf("proxy %s refused to connect to %s: %s", proxy.Host, addr, response.Status)
 	}
-
-	// the response was read through a buffer, which the handshake does not
-	// share, so anything left in it is data the target would never see
-	if reader.Buffered() > 0 {
-		return fmt.Errorf("proxy %s sent %d bytes after the CONNECT response", proxy.Host, reader.Buffered())
-	}
-	return nil
+	return reader, nil
 }
 
 // proxyName describes a proxy for a log line, without its password.
