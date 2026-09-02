@@ -565,8 +565,22 @@ workflow; it does not say the source is good.
 
 ### brew
 
-- brew tap jonhadfield/certreader
-- brew install --cask certreader
+```shell script
+brew tap jonhadfield/certreader
+brew trust jonhadfield/certreader
+brew install certreader
+```
+
+Homebrew 6 refuses to load anything from a third-party tap until the tap is trusted, so `brew trust`
+comes before the install rather than after it fails.
+
+certreader was a cask until v0.24.0 and is a formula from v0.25.0. If you installed the cask, replace
+it once:
+
+```shell script
+brew uninstall --cask certreader
+brew install certreader
+```
 
 ### go
 
@@ -607,7 +621,7 @@ git tag -a -m "add super cool feature" v1.0.0
 git push --follow-tags
 ```
 
-### required secret
+### required secrets
 
 Platform builds run in parallel, so a release takes about as long as its slowest target rather than
 the sum of all five. A prerelease tag (one containing a hyphen, such as `v1.0.0-rc1`) is published as
@@ -617,11 +631,52 @@ Release notes come from the annotated tag message, so write the tag with the not
 
 The workflow needs a `RELEASE_TOKEN` repository secret: a personal access token with `repo` scope on
 both `jonhadfield/certreader` and `jonhadfield/homebrew-certreader`. The token built into Actions
-cannot write to another repository, and the darwin build pushes the cask update to the tap. Without
-the secret the workflow stops at its preflight job and publishes nothing.
+cannot write to another repository, and the darwin build pushes the cask update to the tap.
 
-Run the workflow manually from the Actions tab to check the secret and the GoReleaser configs
+Signing the darwin binaries is optional, and off unless all five of these are set. It is not what
+makes an install work — the formula is, see [why a formula and not a cask](#why-a-formula-and-not-a-cask)
+— so treat it as something to have rather than something to fix:
+
+| secret | what it is |
+| --- | --- |
+| `MACOS_SIGN_P12` | base64 of the Developer ID Application certificate, exported as `.p12` |
+| `MACOS_SIGN_PASSWORD` | the password that `.p12` was exported with |
+| `MACOS_NOTARY_KEY` | base64 of an App Store Connect `.p8` key |
+| `MACOS_NOTARY_KEY_ID` | that key's id, also in its filename |
+| `MACOS_NOTARY_ISSUER_ID` | the issuer uuid shown when the key was created |
+
+```shell script
+gh secret set MACOS_SIGN_P12 --repo jonhadfield/certreader < <(base64 -i DeveloperID.p12)
+gh secret set MACOS_NOTARY_KEY --repo jonhadfield/certreader < <(base64 -i AuthKey_XXXXXXXXXX.p8)
+```
+
+Without `RELEASE_TOKEN` the workflow stops at its preflight job and publishes nothing. The signing
+secrets are all-or-nothing: GoReleaser skips signing entirely when the certificate is absent, so
+preflight fails a half-configured set rather than letting it publish quietly unsigned.
+
+Run the workflow manually from the Actions tab to check the secrets and the GoReleaser configs
 without cutting a tag; a manual run stops after preflight.
+
+### why a formula and not a cask
+
+Homebrew marks what a **cask** installs with `com.apple.quarantine`, and gatekeeper kills a
+quarantined binary that carries no stapled notarization ticket. The command exits 137 and prints
+nothing, which reads like a broken build rather than a refused one:
+
+```shell script
+$ certreader -version
+$ echo $?
+137
+```
+
+A bare executable has nowhere to keep a ticket — `stapler` needs an app bundle, a disk image or an
+installer package — so signing and notarizing the binary does not settle it. On macOS 26 a notarized
+but unstapled binary was still refused in testing.
+
+A **formula** is not quarantined, which is how every other Go command line tool in Homebrew arrives
+able to run. GoReleaser calls `brews` deprecated in favour of `homebrew_casks`; the cask is what
+certreader shipped as up to v0.24.0, and it did not run when installed, so the formula stays until
+there is something to staple a ticket to.
 
 ### releasing by hand
 
