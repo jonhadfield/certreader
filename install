@@ -1,0 +1,124 @@
+#!/bin/sh
+# Install certreader from its github releases.
+#
+#   curl -sL https://raw.githubusercontent.com/jonhadfield/certreader/main/install | sh
+#
+# Reads three optional variables:
+#
+#   CERTREADER_VERSION      a tag to install, e.g. v0.25.1. Default: the latest release.
+#   CERTREADER_INSTALL_DIR  where to put the binary. Default: /usr/local/bin.
+#   GITHUB_URL              for a mirror or an enterprise host.
+set -eu
+
+owner="jonhadfield"
+repo="certreader"
+github_url="${GITHUB_URL:-https://github.com}"
+install_dir="${CERTREADER_INSTALL_DIR:-/usr/local/bin}"
+
+fail() {
+    echo "${repo} install: $1" >&2
+    exit 1
+}
+
+get_os() {
+    uname -s | tr '[:upper:]' '[:lower:]'
+}
+
+get_arch() {
+    case "$(uname -m)" in
+        x86_64 | amd64) echo "amd64" ;;
+        aarch64 | arm64) echo "arm64" ;;
+        *) echo "" ;;
+    esac
+}
+
+# resolve_version follows the redirect that /releases/latest answers with, which
+# names the tag. The api would do as well and is rate limited to 60 requests an
+# hour for anyone not sending a token, which an install script cannot assume.
+resolve_version() {
+    if [ -n "${CERTREADER_VERSION:-}" ]; then
+        echo "${CERTREADER_VERSION}"
+        return
+    fi
+    curl -fsSLI -o /dev/null -w '%{url_effective}' "${github_url}/${owner}/${repo}/releases/latest" |
+        sed 's#.*/tag/##'
+}
+
+# checksum verifies the download against the sums published beside it. The two
+# commands take the same arguments and only one of them is usually present.
+checksum() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum -c "$1"
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 -c "$1"
+    else
+        echo "neither sha256sum nor shasum found, skipping checksum" >&2
+        return 0
+    fi
+}
+
+os="$(get_os)"
+arch="$(get_arch)"
+
+case "${os}" in
+    linux | darwin) ;;
+    *) fail "no build for ${os}; see ${github_url}/${owner}/${repo}/releases" ;;
+esac
+[ -n "${arch}" ] || fail "no build for $(uname -m); see ${github_url}/${owner}/${repo}/releases"
+
+if [ "${os}" = "darwin" ]; then
+    echo "note: on macos, brew install ${owner}/${repo}/${repo} is the supported route" >&2
+fi
+
+version="$(resolve_version)"
+[ -n "${version}" ] || fail "could not work out the latest version"
+# the archives carry the version without its leading v
+number="${version#v}"
+
+archive="${repo}_${number}_${os}_${arch}.tar.gz"
+sums="checksums_${os}_${arch}.txt"
+if [ "${os}" = "darwin" ]; then
+    # the darwin archives share one checksums file rather than having one each
+    sums="checksums_darwin.txt"
+fi
+base="${github_url}/${owner}/${repo}/releases/download/${version}"
+
+work="$(mktemp -d)"
+# leaves nothing behind whether this succeeds or not
+trap 'rm -rf "${work}"' EXIT INT TERM
+
+echo "[1/4] Download ${base}/${archive}"
+curl -fsSL -o "${work}/${archive}" "${base}/${archive}" ||
+    fail "could not download ${archive}"
+
+echo "[2/4] Verify against ${sums}"
+curl -fsSL -o "${work}/${sums}" "${base}/${sums}" || fail "could not download ${sums}"
+# the sums file names every archive of that platform, and -c fails on a line it
+# has no file for, so check the one that was downloaded
+(cd "${work}" && grep " ${archive}\$" "${sums}" > wanted && checksum wanted) ||
+    fail "${archive} does not match its published checksum"
+
+echo "[3/4] Install ${repo} to ${install_dir}"
+tar -xzf "${work}/${archive}" -C "${work}" "${repo}" || fail "could not extract ${repo}"
+if [ -w "${install_dir}" ]; then
+    install -m 0755 "${work}/${repo}" "${install_dir}/${repo}" ||
+        fail "could not write ${install_dir}/${repo}"
+elif command -v sudo >/dev/null 2>&1; then
+    echo "${install_dir} is not writable, using sudo"
+    sudo install -m 0755 "${work}/${repo}" "${install_dir}/${repo}" ||
+        fail "could not write ${install_dir}/${repo} with sudo"
+else
+    fail "${install_dir} is not writable and sudo is not available; set CERTREADER_INSTALL_DIR to somewhere you can write"
+fi
+
+echo "[4/4] Done"
+echo "${repo} ${version} installed to ${install_dir}/${repo}"
+
+# says the binary runs, rather than only that it arrived
+"${install_dir}/${repo}" -version >/dev/null 2>&1 ||
+    echo "warning: ${install_dir}/${repo} did not run" >&2
+
+case ":${PATH}:" in
+    *":${install_dir}:"*) ;;
+    *) echo "note: ${install_dir} is not on your PATH" >&2 ;;
+esac

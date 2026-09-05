@@ -586,6 +586,32 @@ brew uninstall --cask certreader
 brew install certreader
 ```
 
+### linux
+
+```shell script
+curl -sL https://raw.githubusercontent.com/jonhadfield/certreader/main/install | sh
+```
+
+This works out the latest release, downloads the archive for the machine it is run on, checks it
+against the sums published beside it, and installs to `/usr/local/bin`, asking `sudo` only if that
+directory is not already writable. It reads three optional variables:
+
+| variable | |
+| --- | --- |
+| `CERTREADER_VERSION` | a tag to install, e.g. `v0.25.1`. Default: the latest release |
+| `CERTREADER_INSTALL_DIR` | where to put the binary. Default: `/usr/local/bin` |
+| `GITHUB_URL` | for a mirror or an enterprise host |
+
+```shell script
+curl -sL https://raw.githubusercontent.com/jonhadfield/certreader/main/install | CERTREADER_INSTALL_DIR=~/.local/bin sh
+```
+
+The variable goes on the `sh` at the end of the pipe, not on the `curl` at the front, which would set
+it for the download instead of for the script.
+
+amd64 and arm64 are built; anything else is refused with a message rather than a failed download. The
+script runs on macOS too, though `brew` is the supported route there.
+
 ### go
 
 [go](https://golang.org/dl/) has to be installed.
