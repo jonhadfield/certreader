@@ -47,17 +47,18 @@ resolve_version() {
 # checksum_command is settled before anything is downloaded, so that not having
 # one is reported as that rather than reaching the verification and being
 # mistaken there for a download that does not match. The two commands take the
-# same arguments and only one of them is usually present.
-#
-# Finding neither returns zero and prints nothing, rather than tripping set -e
-# at the assignment: an if whose conditions are all false and which has no else
-# is defined to exit zero. The caller checks for the empty answer.
+# same arguments and only one of them is usually present. Finding neither prints
+# nothing and returns zero, so the caller's check on the empty answer is what
+# reports it, rather than set -e ending the script at the assignment without a
+# word. The return says so outright, an if with no else being defined to exit
+# zero anyway but not obviously.
 checksum_command() {
     if command -v sha256sum >/dev/null 2>&1; then
         echo "sha256sum -c"
     elif command -v shasum >/dev/null 2>&1; then
         echo "shasum -a 256 -c"
     fi
+    return 0
 }
 
 os="$(get_os)"
