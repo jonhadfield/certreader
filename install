@@ -44,17 +44,21 @@ resolve_version() {
         sed 's#.*/tag/##'
 }
 
-# checksum verifies the download against the sums published beside it. The two
-# commands take the same arguments and only one of them is usually present.
-checksum() {
+# checksum_command is settled before anything is downloaded, so that not having
+# one is reported as that rather than reaching the verification and being
+# mistaken there for a download that does not match. The two commands take the
+# same arguments and only one of them is usually present. Finding neither prints
+# nothing and returns zero, so the caller's check on the empty answer is what
+# reports it, rather than set -e ending the script at the assignment without a
+# word. The return says so outright, an if with no else being defined to exit
+# zero anyway but not obviously.
+checksum_command() {
     if command -v sha256sum >/dev/null 2>&1; then
-        sha256sum -c "$1"
+        echo "sha256sum -c"
     elif command -v shasum >/dev/null 2>&1; then
-        shasum -a 256 -c "$1"
-    else
-        echo "neither sha256sum nor shasum found, skipping checksum" >&2
-        return 0
+        echo "shasum -a 256 -c"
     fi
+    return 0
 }
 
 os="$(get_os)"
@@ -67,8 +71,12 @@ esac
 [ -n "${arch}" ] || fail "no build for $(uname -m); see ${github_url}/${owner}/${repo}/releases"
 
 if [ "${os}" = "darwin" ]; then
-    echo "note: on macos, brew install ${owner}/${repo}/${repo} is the supported route" >&2
+    echo "note: on macOS, brew install ${owner}/${repo}/${repo} is the supported route" >&2
 fi
+
+checksum="$(checksum_command)"
+[ -n "${checksum}" ] ||
+    fail "neither sha256sum nor shasum is available to check the download with"
 
 version="$(resolve_version)"
 [ -n "${version}" ] || fail "could not work out the latest version"
@@ -94,12 +102,30 @@ curl -fsSL -o "${work}/${archive}" "${base}/${archive}" ||
 echo "[2/4] Verify against ${sums}"
 curl -fsSL -o "${work}/${sums}" "${base}/${sums}" || fail "could not download ${sums}"
 # the sums file names every archive of that platform, and -c fails on a line it
-# has no file for, so check the one that was downloaded
-(cd "${work}" && grep " ${archive}\$" "${sums}" > wanted && checksum wanted) ||
+# has no file for, so pick out the line for the one that was downloaded. awk
+# compares the whole field, where a grep would read the dots in the name as a
+# pattern and could match a longer one
+awk -v want="${archive}" '$2 == want' "${work}/${sums}" > "${work}/wanted"
+[ -s "${work}/wanted" ] || fail "${sums} has no entry for ${archive}"
+# unquoted, because the command is two or four words
+# shellcheck disable=SC2086
+(cd "${work}" && ${checksum} wanted) ||
     fail "${archive} does not match its published checksum"
 
 echo "[3/4] Install ${repo} to ${install_dir}"
 tar -xzf "${work}/${archive}" -C "${work}" "${repo}" || fail "could not extract ${repo}"
+
+# a directory that is not there is the ordinary case for something like
+# ~/.local/bin, and is not the same as one that cannot be written to
+if [ ! -d "${install_dir}" ]; then
+    echo "${install_dir} does not exist, creating it"
+    if ! mkdir -p "${install_dir}" 2>/dev/null; then
+        command -v sudo >/dev/null 2>&1 ||
+            fail "${install_dir} does not exist and sudo is not available to create it; set CERTREADER_INSTALL_DIR to a directory you can create"
+        sudo mkdir -p "${install_dir}" || fail "could not create ${install_dir}"
+    fi
+fi
+
 if [ -w "${install_dir}" ]; then
     install -m 0755 "${work}/${repo}" "${install_dir}/${repo}" ||
         fail "could not write ${install_dir}/${repo}"
