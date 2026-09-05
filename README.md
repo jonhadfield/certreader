@@ -593,8 +593,9 @@ curl -sL https://raw.githubusercontent.com/jonhadfield/certreader/main/install |
 ```
 
 This works out the latest release, downloads the archive for the machine it is run on, checks it
-against the sums published beside it, and installs to `/usr/local/bin`, asking `sudo` only if that
-directory is not already writable. It reads three optional variables:
+against the sums published beside it, and installs to `/usr/local/bin`. The directory is created if
+it is not there, and `sudo` is used only if it cannot be written to otherwise. A download that does
+not match its checksum is refused, and nothing is installed. It reads three optional variables:
 
 | variable | |
 | --- | --- |
