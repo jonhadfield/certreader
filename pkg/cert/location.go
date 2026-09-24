@@ -311,6 +311,11 @@ func LoadFromNetwork(addr string, opts NetworkOptions) Location {
 		opts.log().Debug("connection failed", slog.String("address", addr), slog.Duration("after", time.Since(started)), slog.Any("err", err))
 		return Location{Path: addr, Error: err}
 	}
+	// everything wanted from the server arrived in the handshake. Left open,
+	// every socket stayed open until the program exited, so -concurrency
+	// bounded how many connections were being made at once but not how many
+	// were held.
+	defer func() { _ = conn.Close() }()
 
 	connectionState := conn.ConnectionState()
 	x509Certificates := connectionState.PeerCertificates
