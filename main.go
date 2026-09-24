@@ -10,6 +10,7 @@ import (
 	"github.com/jonhadfield/certreader/pkg/print"
 	"log/slog"
 	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -301,6 +302,14 @@ func loadFromArg(arg string, flags Flags) cert.Location {
 		Timeout:            flags.Timeout,
 		Logger:             tracer(flags),
 	}
+	if address, ok, err := urlAddress(arg, flags.StartTLS); ok {
+		if err != nil {
+			return cert.Location{Path: arg, Error: err}
+		}
+		// named by the address rather than the url, which is what -verify
+		// takes the hostname from
+		return cert.LoadFromNetwork(address, options)
+	}
 	if isTCPNetworkAddress(arg) {
 		return cert.LoadFromNetwork(arg, options)
 	}
@@ -331,6 +340,38 @@ func bareHost(arg string) (string, bool) {
 		return address, true
 	}
 	return "", false
+}
+
+// urlAddress reports the address named by an argument written as a url, which
+// is what gets copied out of a browser. Only https says there is tls at the
+// other end: http and most other schemes are not tls at all, and the services
+// that upgrade to it are read with -starttls and host:port. The path is
+// dropped, since a certificate belongs to the connection rather than to a page.
+//
+// ok is false for an argument that is not a url, and true with an error for
+// one that is but cannot be read.
+func urlAddress(arg string, protocol cert.StartTLSProtocol) (address string, ok bool, err error) {
+	if !strings.Contains(arg, "://") {
+		return "", false, nil
+	}
+	u, err := url.Parse(arg)
+	if err != nil {
+		return "", true, err
+	}
+	if !strings.EqualFold(u.Scheme, "https") {
+		return "", true, fmt.Errorf("%s:// is not read, only https:// is: give host:port instead, with -starttls for a service that upgrades to tls", u.Scheme)
+	}
+	if protocol != cert.StartTLSNone {
+		return "", true, errors.New("an https:// url is tls from the start, so -starttls does not apply to it: give host:port instead")
+	}
+	if u.Hostname() == "" {
+		return "", true, fmt.Errorf("%s names no host", arg)
+	}
+	port := u.Port()
+	if port == "" {
+		port = "443"
+	}
+	return net.JoinHostPort(u.Hostname(), port), true, nil
 }
 
 // defaultPort is the port assumed for a bare hostname. Without -starttls that

@@ -103,7 +103,7 @@ workflow; it does not say the source is good.
 ## usage
 
 ```shell script
-certreader [flags] [<file>|<host:port> ...]
+certreader [flags] [<file>|<host:port>|<https://host[:port]> ...]
 ```
 
 **file** argument can be:
@@ -111,6 +111,7 @@ certreader [flags] [<file>|<host:port> ...]
  - **TCP network address** `certreader <host:port>` e.g. `certreader google.com:443`
  - **IPv6 address** `certreader <[address]:port>` e.g. `certreader "[2606:2800:21f::1]:443"` (the brackets separate the address from the port, and your shell may need them quoted)
  - **FQDN** `certreader <host>` e.g. `certreader www.example.com` (port 443 is assumed when no local file with that name exists, for an IP address as well as a name)
+ - **URL** `certreader <https://host[:port]>` e.g. `certreader https://www.example.com/some/page` (as copied from a browser: the path is ignored and port 443 assumed. Only `https://` is read, since other schemes are not TLS or, for services that upgrade to it, need `-starttls` and `host:port`)
  - **stdin** `echo "<cert-content>" | certreader`
 
 ### flags
