@@ -131,7 +131,7 @@ jobs:
         # nothing needs cgo, so every target cross-compiles on the runner with
         # the go that go.mod names, and no C toolchain
         name: setup go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       -
