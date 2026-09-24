@@ -152,7 +152,7 @@ jobs:
         #
         #   gh attestation verify certreader_x.y.z_darwin_arm64.tar.gz --repo jonhadfield/certreader
         name: attest the archives
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             dist/*.tar.gz
