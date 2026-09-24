@@ -19,7 +19,7 @@ jobs:
           persist-credentials: false
       -
         name: setup go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           # inputs is empty for a push trigger, so this pinned nothing and CI
           # silently used whatever go the runner shipped
