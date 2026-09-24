@@ -2,6 +2,7 @@ package cert
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -443,9 +444,12 @@ func LoadFromClipboard(password string) Location {
 		return Location{Path: "clipboard", Error: err}
 	}
 
-	content := clipboard.Read(clipboard.FmtText)
-	if content == nil {
+	content, err := clipboard.Read(context.Background(), clipboard.FmtText)
+	if errors.Is(err, clipboard.ErrNoData) || (err == nil && content == nil) {
 		return Location{Path: "clipboard", Error: errors.New("clipboard is empty")}
+	}
+	if err != nil {
+		return Location{Path: "clipboard", Error: err}
 	}
 	return loadContent("clipboard", content, password)
 }
