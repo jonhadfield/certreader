@@ -1,6 +1,16 @@
-# print TLS certificate info
+# certreader
 
-A fork of the excellent [certinfo](https://github.com/pete911/certinfo), adding:
+Print detailed information about TLS certificates from local files, network hosts, stdin or the
+clipboard — and check them: chains, expiry, revocation, with json output and exit codes for
+monitoring.
+
+[![go](https://github.com/jonhadfield/certreader/actions/workflows/go.yml/badge.svg)](https://github.com/jonhadfield/certreader/actions/workflows/go.yml)
+[![release](https://img.shields.io/github/v/release/jonhadfield/certreader)](https://github.com/jonhadfield/certreader/releases/latest)
+[![license](https://img.shields.io/github/license/jonhadfield/certreader)](LICENSE)
+
+![certreader reading two hosts and a certificate request](docs/screenshot.svg)
+
+It is a fork of the excellent [certinfo](https://github.com/pete911/certinfo), adding:
 
 - **revocation checking** — the OCSP response a server staples to the handshake, and with
   `-revocation` a live check against the certificate's OCSP responders, falling back to its CRLs
@@ -15,13 +25,77 @@ A fork of the excellent [certinfo](https://github.com/pete911/certinfo), adding:
 - clipboard input, colourised output, IPv6 addresses, and bare hostnames
   (`certreader example.com`) defaulting to port 443
 
-[![go](https://github.com/jonhadfield/certreader/actions/workflows/go.yml/badge.svg)](https://github.com/jonhadfield/certreader/actions/workflows/go.yml)
-[![release](https://img.shields.io/github/v/release/jonhadfield/certreader)](https://github.com/jonhadfield/certreader/releases/latest)
-[![license](https://img.shields.io/github/license/jonhadfield/certreader)](LICENSE)
+**Contents:** [install](#install) · [usage](#usage) · [verify](#verify) · [warnings](#warnings) ·
+[revocation](#revocation) · [compare](#compare) · [fingerprints](#fingerprints) ·
+[starttls](#starttls) · [json output](#json-output) · [exit codes](#exit-codes) ·
+[examples](#examples) · [development](#development)
 
-Output detailed information about TLS certificates from local files, network hosts or clipboard.
+## install
 
-![certreader reading two hosts and a certificate request](docs/screenshot.svg)
+### brew
+
+#### a fresh install
+
+```shell script
+brew tap jonhadfield/certreader
+brew trust jonhadfield/certreader
+brew install certreader
+```
+
+Homebrew 6 refuses to load anything from a third-party tap until the tap is trusted, so `brew trust`
+comes before the install rather than after it fails.
+
+#### replacing the cask
+
+certreader was a cask until v0.24.0 and is a formula from v0.25.0. If you installed the cask, replace
+it once:
+
+```shell script
+brew uninstall --cask certreader
+brew install certreader
+```
+
+### linux
+
+```shell script
+curl -sL https://raw.githubusercontent.com/jonhadfield/certreader/main/install | sh
+```
+
+This works out the latest release, downloads the archive for the machine it is run on, checks it
+against the sums published beside it, and installs to `/usr/local/bin`. The directory is created if
+it is not there, and `sudo` is used only if it cannot be written to otherwise. A download that does
+not match its checksum is refused, and nothing is installed. It reads three optional variables:
+
+| variable | meaning |
+| --- | --- |
+| `CERTREADER_VERSION` | a tag to install, e.g. `v0.25.1`. Default: the latest release |
+| `CERTREADER_INSTALL_DIR` | where to put the binary. Default: `/usr/local/bin` |
+| `GITHUB_URL` | for a mirror or an enterprise host |
+
+```shell script
+curl -sL https://raw.githubusercontent.com/jonhadfield/certreader/main/install | CERTREADER_INSTALL_DIR=~/.local/bin sh
+```
+
+The variable goes on the `sh` at the end of the pipe, not on the `curl` at the front, which would set
+it for the download instead of for the script.
+
+amd64 and arm64 are built; anything else is refused with a message rather than a failed download. The
+script runs on macOS too, though `brew` is the supported route there.
+
+### download
+
+Binaries for macOS, Linux and Windows are on the [releases page](https://github.com/jonhadfield/certreader/releases).
+
+Each archive carries a signed statement of which workflow built it, from which commit:
+
+```shell script
+gh attestation verify certreader_0.23.0_darwin_arm64.tar.gz --repo jonhadfield/certreader
+```
+
+The checksums published beside the archives say only that a download was not corrupted, since whoever
+could change one could change the other. This is checked against GitHub rather than against the
+release, and needs no key from anyone. It says the artefact came from this repository's release
+workflow; it does not say the source is good.
 
 ## usage
 
@@ -36,203 +110,45 @@ certreader [flags] [<file>|<host:port> ...]
  - **FQDN** `certreader <host>` e.g. `certreader www.example.com` (port 443 is assumed when no local file with that name exists, for an IP address as well as a name)
  - **stdin** `echo "<cert-content>" | certreader`
 
-```
-+-------------------------------------------------------------------------------------------------------------------+
-| optional flags                                                                                                    |
-+---------------+---------------------------------------------------------------------------------------------------+
-| -chains       | whether to print verified chains as well                                                          |
-| -concurrency  | how many locations to read at once, 0 for no limit (default 100)                                  |
-| -clipboard    | read input from clipboard (only if the clipboard is supported)                                    |
-| -compare      | compare two locations and report whether they serve the same certificate                          |
-| -csr          | force CSR mode (CSRs are auto-detected, so this is optional)                                      |
-| -expiry       | print expiry of certificates                                                                      |
-| -expiring-within | exit non-zero if any certificate expires within this window, e.g. 30d, 2w, 72h                  |
-| -fail-on-warning | exit non-zero if any certificate or chain warning is reported                                   |
-| -fingerprint  | print the sha-256 of the certificate and of its public key                                        |
-| -follow-redirects| allow a revocation or issuer request to be redirected away from the address the certificate named |
-| -extensions   | whether to print extensions                                                                       |
-| -insecure     | whether a client verifies the server's certificate chain and host name (only applicable for host) |
-| -issuer-like  | print certificates with issuer field containing supplied string                                   |
-| -json         | output as json (takes precedence over -expiry and -pem-only)                                      |
-| -no-duplicate | do not print duplicate certificates                                                               |
-| -no-expired   | do not print expired certificates                                                                 |
-| -pem          | whether to print pem as well                                                                      |
-| -pem-only     | whether to print only pem (useful for downloading certs from host)                                |
-| -pfx-password | password used when parsing PKCS#12/PFX bundles; leave empty for passwordless files                |
-| -revocation   | check revocation status via OCSP, falling back to CRL (makes network requests)                    |
-| -server-name  | verify the hostname on the returned certificates, useful for testing SNI                          |
-| -signature    | whether to print signature                                                                        |
-| -starttls     | upgrade a plaintext connection to tls: smtp, imap, pop3, ftp, nntp, ldap, postgres                |
-| -sort-expiry  | sort certificates by expiration date                                                              |
-| -subject-like | print certificates with subject field containing supplied string                                  |
-| -verbose      | trace what is being done, to stderr                                                                |
-| -verify       | verify against the system trust store and report why it fails                                     |
-| -timeout      | how long to wait for a connection, and proportionally longer for revocation requests (default 5s)  |
-| -more         | use a combination of the '-pem -signature -chains' flags                                          |
-| -version      | certreader version                                                                                  |
-| -help         | help                                                                                              |
-+---------------+---------------------------------------------------------------------------------------------------+
+### flags
 
-When a PKCS#12/PFX input requires a password and no `--pfx-password` value is supplied, `certreader` prompts on the
+- `-chains` — whether to print verified chains as well
+- `-clipboard` — read input from clipboard (only if the clipboard is supported)
+- `-compare` — compare two locations and report whether they serve the same certificate
+- `-concurrency` — how many locations to read at once, 0 for no limit (default 100)
+- `-csr` — force CSR mode (CSRs are auto-detected, so this is optional)
+- `-expiring-within` — exit non-zero if any certificate expires within this window, e.g. 30d, 2w, 72h
+- `-expiry` — print expiry of certificates
+- `-extensions` — whether to print extensions
+- `-fail-on-warning` — exit non-zero if any certificate or chain warning is reported
+- `-fingerprint` — print the sha-256 of the certificate and of its public key
+- `-follow-redirects` — allow a revocation or issuer request to be redirected away from the address the certificate named
+- `-insecure` — whether a client verifies the server's certificate chain and host name (only applicable for host)
+- `-issuer-like` — print certificates with issuer field containing supplied string
+- `-json` — output as json (takes precedence over -expiry and -pem-only)
+- `-more` — use a combination of the '-pem -signature -chains' flags
+- `-no-duplicate` — do not print duplicate certificates
+- `-no-expired` — do not print expired certificates
+- `-pem` — whether to print pem as well
+- `-pem-only` — whether to print only pem (useful for downloading certs from host)
+- `-pfx-password` — password used when parsing PKCS#12/PFX bundles; leave empty for passwordless files
+- `-revocation` — check revocation status via OCSP, falling back to CRL (makes network requests)
+- `-server-name` — verify the hostname on the returned certificates, useful for testing SNI
+- `-signature` — whether to print signature
+- `-sort-expiry` — sort certificates by expiration date
+- `-starttls` — upgrade a plaintext connection to tls: smtp, imap, pop3, ftp, nntp, ldap, postgres
+- `-subject-like` — print certificates with subject field containing supplied string
+- `-timeout` — how long to wait for a connection, and proportionally longer for revocation requests (default 5s)
+- `-verbose` — trace what is being done, to stderr
+- `-verify` — verify against the system trust store and report why it fails
+- `-version` — certreader version
+- `-help` — help
+
+When a PKCS#12/PFX input requires a password and no `-pfx-password` value is supplied, `certreader` prompts on the
 terminal; set the flag or `CERTREADER_PFX_PASSWORD` for non-interactive usage.
-```
 
-## certificate requests
-
-A request is signed by the key it asks to have certified. That self-signature is the only evidence
-the requester holds the matching private key, and the only thing binding the subject and the
-alternative names to it. Without it a request is a list of claims anyone could have written.
-
-`certreader` checks it and says so, whether or not it holds:
-
-```
-Self-Signature: verified against the key in the request
-```
-
-```
-Self-Signature: self-signature does not verify: crypto/rsa: verification error
-```
-
-The rest of the request is still printed either way — it is what the request claims, worth reading
-alongside the reason not to believe it. `-fail-on-warning` exits non-zero on one that does not
-verify, and `-json` carries `self_signature_valid` along with a warning coded
-`invalid-self-signature`.
-
-### where the requests go
-
-`-revocation` and the issuer fetch send requests to addresses written in the certificate, by whoever
-issued it. Only those addresses are contacted: a redirect is refused, and says so.
-
-```
-Revocation
-    OCSP responder (http://ocsp.example.com): redirected to http://10.0.0.1/, which is not where the
-    certificate said: allow it with -follow-redirects
-```
-
-A redirect can send a request somewhere the certificate has no business naming — a private address,
-a service on the machine running this — and the response never has to come back for the request to
-have been made. `-follow-redirects` allows it, checks each hop as the first address was checked, and
-stops after three.
-
-Refusing them costs nothing in practice: ten public hosts including Google, GitHub, Cloudflare,
-Apple, Amazon, Microsoft, Stripe and PayPal all answer without a redirect.
-
-## verbose
-
-`-verbose` traces what the tool is doing, on stderr, so stdout is still the document:
-
-```shell script
-certreader -verbose -revocation google.com:443
-```
-
-```
-level=DEBUG msg=reading locations=1 concurrency=100 timeout=5s
-level=DEBUG msg=connecting address=google.com:443 starttls="" timeout=5s server_name=""
-level=DEBUG msg=connected address=google.com:443 after=72ms tls="TLS 1.3" certificates=3 stapled_ocsp=false
-level=DEBUG msg="checking revocation" subject=*.google.com serial=E0:E3:... stapled=false ocsp_responders=0 crl_distribution_points=1
-level=DEBUG msg="reading a CRL" distribution_point=http://c.pki.goog/wr2/oBFYYahzgVI.crl
-level=DEBUG msg="downloading a CRL" distribution_point=http://c.pki.goog/wr2/oBFYYahzgVI.crl
-level=DEBUG msg="CRL read" distribution_point=http://c.pki.goog/wr2/oBFYYahzgVI.crl revoked_certificates=1387
-```
-
-This is the answer to "why did it say that": above, the certificate names no OCSP responder, which is
-why a CRL was read instead. A `reading` line with no `downloading` after it is a list already held,
-so a scan of many hosts behind one authority shows that it fetched the list once.
-
-## compare
-
-`-compare` takes two locations and says whether they are serving the same certificate:
-
-```shell script
-certreader -compare deployed.pem www.example.com:443
-```
-
-```
---- [deployed.pem vs www.example.com:443 TLS 1.3] ---
-Certificate: same
-    SHA-256: 8F:95:CC:30:E8:8F:6B:71:EF:35:1F:71:03:32:85:0C:55:44:E7:59:4A:F4:0B:1A:7E:11:9E:18:EF:D6:10:22
-Public Key: same
-Chain: different (deployed.pem sends 1, www.example.com:443 sends 3)
-Result: the same certificate, sent with a different chain
-```
-
-The chain is reported but is not a difference worth failing on: deploying a leaf and serving it with
-the intermediates a client needs is normal. Only the certificate decides the exit code, so
-
-```shell script
-certreader -compare deployed.pem www.example.com:443 || echo "not serving what was deployed"
-```
-
-exits 0 when the certificate matches, 2 when it does not, and 1 if either location could not be read.
-
-When the certificates differ, the key is the interesting half — it separates a reissue from a
-rotation:
-
-```
-Certificate: different
-Public Key: same
-Result: different certificates carrying the same key, which is what a reissue looks like
-```
-
-`-json` gives the same answer as a document, with `same`, `same_certificate`, `same_key`,
-`same_chain` and both fingerprints.
-
-## fingerprints
-
-`-fingerprint` prints two, and they answer different questions:
-
-```shell script
-certreader -fingerprint example.com:443
-```
-
-```
-Fingerprint SHA-256: CB:3C:CB:B7:60:31:E5:E0:13:8F:8D:D3:9A:23:F9:DE:47:FF:C3:5E:43:C1:14:4C:EA:27:D4:6A:5A:B1:CB:5F
-Public Key SHA-256: i7WTqTvh0OioIruIfFR4kMPnBqrS2rdiVPl/s2uC/CY=
-```
-
-The first names *this certificate*, and is what `openssl x509 -fingerprint -sha256` prints and what a
-browser shows. It changes on every reissue, so it answers "is the load balancer serving the same
-certificate as this file".
-
-The second names *the key*, base64 encoded, which is the form a pin is written in. It survives a
-reissue that keeps the key, so it answers "has the key actually been rotated".
-
-Both are always present in `-json`, as `fingerprint_sha256` and `public_key_sha256`, since something
-reading the output would not know to ask for them.
-
-## starttls
-
-Mail, directory and database servers usually begin in plaintext and upgrade to TLS on request, so a
-direct handshake cannot reach their certificates. `-starttls` performs the upgrade first:
-
-```shell script
-certreader -starttls smtp smtp.gmail.com:587
-```
-
-```
---- [smtp.gmail.com:587 TLS 1.3] ---
-Subject: CN=smtp.gmail.com
-Issuer: CN=WR2,O=Google Trust Services,C=US
-```
-
-Supported protocols, and the port assumed when only a hostname is given:
-
-| protocol | port |
-|----------|------|
-| smtp | 587 |
-| imap | 143 |
-| pop3 | 110 |
-| ftp | 21 |
-| nntp | 119 |
-| ldap | 389 |
-| postgres | 5432 |
-
-So `certreader -starttls imap mail.example.com` connects to port 143, where the same argument without
-`-starttls` would use 443. For smtp the submission port is assumed rather than 25, since that is
-where a certificate is usually being inspected; give `host:25` explicitly for the relay port.
-
-This applies to network arguments only, and combines with everything else — `-json`, `-revocation`
-and `-expiring-within` all work the same over an upgraded connection.
+Every flag can also be set as an environment variable (`CERTREADER_<FLAG>=true` e.g. `CERTREADER_INSECURE=true`) and can be then
+overridden with a flag.
 
 ## verify
 
@@ -353,53 +269,6 @@ certreader -verify -fail-on-warning example.com:443 || echo "needs attention"
 Chain warnings are only worked out by `-verify`, so `-fail-on-warning` without it considers the
 certificates alone.
 
-## exit codes
-
-| code | meaning |
-|------|---------|
-| 0 | everything read, and any checks asked for passed |
-| 1 | a location could not be read, so its status is unknown rather than good |
-| 2 | a check failed: a certificate is revoked, or expires within `-expiring-within` |
-
-Checks are opt-in. Without `-revocation` nothing is known about revocation, and without
-`-expiring-within` an expired certificate is reported but not treated as a failure — inspecting an
-expired certificate is a normal thing to want to do.
-
-```shell script
-certreader -revocation -expiring-within 14d example.com:443 || echo "needs attention"
-```
-
-`-expiring-within` accepts go duration syntax plus day and week suffixes: `30d`, `2w`, `72h`, `90m`.
-A window of `0` means "already expired", and an expired certificate falls inside any window.
-
-Where both apply, a failed check (2) outranks a load error (1): a certificate known to be revoked is
-more actionable than one that could not be read, and load failures are reported on stderr anyway.
-Only what survives the filtering flags is checked, so `-no-expired` excludes certificates from the
-checks as well as from the output.
-
-## json output
-
-`-json` emits a single JSON document on stdout instead of the formatted text, for piping into `jq` or
-a monitoring check. Logging goes to stderr, so the document stays clean even with `-verbose`.
-
-```shell script
-certreader -json www.digicert.com | jq -r '.locations[].certificates[0] | "\(.subject) expires \(.not_after)"'
-```
-
-```shell script
-certreader -json -revocation www.digicert.com | jq -r '.locations[].revocation.status'
-```
-
-Every location becomes an entry under `locations`, carrying `certificates` or `csrs`, and the
-revocation result when one was requested. A location that failed to load reports an `error` instead,
-and a certificate that failed to parse carries only its `position` and `error`, since nothing else
-could be read from it. Timestamps are RFC 3339.
-
-The `extensions`, `signature` and `pem` fields are included only when the corresponding flags are
-set, matching what the text output would show, so `-json -more -extensions` gives everything.
-
-Field names are part of the interface and will be added to rather than renamed.
-
 ## revocation
 
 By default, when reading from a network host, `certreader` prints the OCSP response the server stapled to the TLS
@@ -457,6 +326,25 @@ A downloaded certificate is only used once it has been shown to have signed the 
 plain http. If no issuer can be obtained, OCSP is skipped, as no request can be built without one, and any CRL verdict
 is reported as `not verified`. A verdict past its `Next Update` is marked `[stale]`.
 
+### where the requests go
+
+`-revocation` and the issuer fetch send requests to addresses written in the certificate, by whoever
+issued it. Only those addresses are contacted: a redirect is refused, and says so.
+
+```
+Revocation
+    OCSP responder (http://ocsp.example.com): redirected to http://10.0.0.1/, which is not where the
+    certificate said: allow it with -follow-redirects
+```
+
+A redirect can send a request somewhere the certificate has no business naming — a private address,
+a service on the machine running this — and the response never has to come back for the request to
+have been made. `-follow-redirects` allows it, checks each hop as the first address was checked, and
+stops after three.
+
+Refusing them costs nothing in practice: ten public hosts including Google, GitHub, Cloudflare,
+Apple, Amazon, Microsoft, Stripe and PayPal all answer without a redirect.
+
 ### interpreting the result
 
 A status of `unknown` means no source could be reached or trusted — it is not the same as the certificate being valid,
@@ -472,6 +360,169 @@ Requests honour `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`, as the connection to 
 (see [proxies](#proxies)). Each request is bounded by a 10 second timeout, the whole
 check by 30 seconds, and response bodies by 32MB. Revocation is checked only for the default output, not for `-expiry`
 or `-pem-only`.
+
+## compare
+
+`-compare` takes two locations and says whether they are serving the same certificate:
+
+```shell script
+certreader -compare deployed.pem www.example.com:443
+```
+
+```
+--- [deployed.pem vs www.example.com:443 TLS 1.3] ---
+Certificate: same
+    SHA-256: 8F:95:CC:30:E8:8F:6B:71:EF:35:1F:71:03:32:85:0C:55:44:E7:59:4A:F4:0B:1A:7E:11:9E:18:EF:D6:10:22
+Public Key: same
+Chain: different (deployed.pem sends 1, www.example.com:443 sends 3)
+Result: the same certificate, sent with a different chain
+```
+
+The chain is reported but is not a difference worth failing on: deploying a leaf and serving it with
+the intermediates a client needs is normal. Only the certificate decides the exit code, so
+
+```shell script
+certreader -compare deployed.pem www.example.com:443 || echo "not serving what was deployed"
+```
+
+exits 0 when the certificate matches, 2 when it does not, and 1 if either location could not be read.
+
+When the certificates differ, the key is the interesting half — it separates a reissue from a
+rotation:
+
+```
+Certificate: different
+Public Key: same
+Result: different certificates carrying the same key, which is what a reissue looks like
+```
+
+`-json` gives the same answer as a document, with `same`, `same_certificate`, `same_key`,
+`same_chain` and both fingerprints.
+
+## fingerprints
+
+`-fingerprint` prints two, and they answer different questions:
+
+```shell script
+certreader -fingerprint example.com:443
+```
+
+```
+Fingerprint SHA-256: CB:3C:CB:B7:60:31:E5:E0:13:8F:8D:D3:9A:23:F9:DE:47:FF:C3:5E:43:C1:14:4C:EA:27:D4:6A:5A:B1:CB:5F
+Public Key SHA-256: i7WTqTvh0OioIruIfFR4kMPnBqrS2rdiVPl/s2uC/CY=
+```
+
+The first names *this certificate*, and is what `openssl x509 -fingerprint -sha256` prints and what a
+browser shows. It changes on every reissue, so it answers "is the load balancer serving the same
+certificate as this file".
+
+The second names *the key*, base64 encoded, which is the form a pin is written in. It survives a
+reissue that keeps the key, so it answers "has the key actually been rotated".
+
+Both are always present in `-json`, as `fingerprint_sha256` and `public_key_sha256`, since something
+reading the output would not know to ask for them.
+
+## starttls
+
+Mail, directory and database servers usually begin in plaintext and upgrade to TLS on request, so a
+direct handshake cannot reach their certificates. `-starttls` performs the upgrade first:
+
+```shell script
+certreader -starttls smtp smtp.gmail.com:587
+```
+
+```
+--- [smtp.gmail.com:587 TLS 1.3] ---
+Subject: CN=smtp.gmail.com
+Issuer: CN=WR2,O=Google Trust Services,C=US
+```
+
+Supported protocols, and the port assumed when only a hostname is given:
+
+| protocol | port |
+|----------|------|
+| smtp | 587 |
+| imap | 143 |
+| pop3 | 110 |
+| ftp | 21 |
+| nntp | 119 |
+| ldap | 389 |
+| postgres | 5432 |
+
+So `certreader -starttls imap mail.example.com` connects to port 143, where the same argument without
+`-starttls` would use 443. For smtp the submission port is assumed rather than 25, since that is
+where a certificate is usually being inspected; give `host:25` explicitly for the relay port.
+
+This applies to network arguments only, and combines with everything else — `-json`, `-revocation`
+and `-expiring-within` all work the same over an upgraded connection.
+
+## certificate requests
+
+A request is signed by the key it asks to have certified. That self-signature is the only evidence
+the requester holds the matching private key, and the only thing binding the subject and the
+alternative names to it. Without it a request is a list of claims anyone could have written.
+
+`certreader` checks it and says so, whether or not it holds:
+
+```
+Self-Signature: verified against the key in the request
+```
+
+```
+Self-Signature: self-signature does not verify: crypto/rsa: verification error
+```
+
+The rest of the request is still printed either way — it is what the request claims, worth reading
+alongside the reason not to believe it. `-fail-on-warning` exits non-zero on one that does not
+verify, and `-json` carries `self_signature_valid` along with a warning coded
+`invalid-self-signature`.
+
+## json output
+
+`-json` emits a single JSON document on stdout instead of the formatted text, for piping into `jq` or
+a monitoring check. Logging goes to stderr, so the document stays clean even with `-verbose`.
+
+```shell script
+certreader -json www.digicert.com | jq -r '.locations[].certificates[0] | "\(.subject) expires \(.not_after)"'
+```
+
+```shell script
+certreader -json -revocation www.digicert.com | jq -r '.locations[].revocation.status'
+```
+
+Every location becomes an entry under `locations`, carrying `certificates` or `csrs`, and the
+revocation result when one was requested. A location that failed to load reports an `error` instead,
+and a certificate that failed to parse carries only its `position` and `error`, since nothing else
+could be read from it. Timestamps are RFC 3339.
+
+The `extensions`, `signature` and `pem` fields are included only when the corresponding flags are
+set, matching what the text output would show, so `-json -more -extensions` gives everything.
+
+Field names are part of the interface and will be added to rather than renamed.
+
+## exit codes
+
+| code | meaning |
+|------|---------|
+| 0 | everything read, and any checks asked for passed |
+| 1 | a location could not be read, so its status is unknown rather than good |
+| 2 | a check failed: a certificate is revoked, or expires within `-expiring-within` |
+
+Checks are opt-in. Without `-revocation` nothing is known about revocation, and without
+`-expiring-within` an expired certificate is reported but not treated as a failure — inspecting an
+expired certificate is a normal thing to want to do.
+
+```shell script
+certreader -revocation -expiring-within 14d example.com:443 || echo "needs attention"
+```
+
+`-expiring-within` accepts go duration syntax plus day and week suffixes: `30d`, `2w`, `72h`, `90m`.
+A window of `0` means "already expired", and an expired certificate falls inside any window.
+
+Where both apply, a failed check (2) outranks a load error (1): a certificate known to be revoked is
+more actionable than one that could not be read, and load failures are reported on stderr anyway.
+Only what survives the filtering flags is checked, so `-no-expired` excludes certificates from the
+checks as well as from the output.
 
 ## timeouts
 
@@ -543,166 +594,27 @@ If you need to run against multiple hosts, it is faster to execute command with 
 `certreader -insecure -expiry google.com:443 amazon.com:443 ...` rather than executing command multiple times. Args are
 executed concurrently and much faster.
 
-Flags can be set as env. variable as well (`CERTREADER_<FLAG>=true` e.g. `CERTREADER_INSECURE=true`) and can be then
-overridden with a flag.
+## verbose
 
-## download
-
- - [binary](https://github.com/jonhadfield/certreader/releases)
-
-Each archive carries a signed statement of which workflow built it, from which commit:
+`-verbose` traces what the tool is doing, on stderr, so stdout is still the document:
 
 ```shell script
-gh attestation verify certreader_0.23.0_darwin_arm64.tar.gz --repo jonhadfield/certreader
+certreader -verbose -revocation google.com:443
 ```
 
-The checksums published beside the archives say only that a download was not corrupted, since whoever
-could change one could change the other. This is checked against GitHub rather than against the
-release, and needs no key from anyone. It says the artefact came from this repository's release
-workflow; it does not say the source is good.
-
-## build/install
-
-### brew
-
-#### a fresh install
-
-```shell script
-brew tap jonhadfield/certreader
-brew trust jonhadfield/certreader
-brew install certreader
+```
+level=DEBUG msg=reading locations=1 concurrency=100 timeout=5s
+level=DEBUG msg=connecting address=google.com:443 starttls="" timeout=5s server_name=""
+level=DEBUG msg=connected address=google.com:443 after=72ms tls="TLS 1.3" certificates=3 stapled_ocsp=false
+level=DEBUG msg="checking revocation" subject=*.google.com serial=E0:E3:... stapled=false ocsp_responders=0 crl_distribution_points=1
+level=DEBUG msg="reading a CRL" distribution_point=http://c.pki.goog/wr2/oBFYYahzgVI.crl
+level=DEBUG msg="downloading a CRL" distribution_point=http://c.pki.goog/wr2/oBFYYahzgVI.crl
+level=DEBUG msg="CRL read" distribution_point=http://c.pki.goog/wr2/oBFYYahzgVI.crl revoked_certificates=1387
 ```
 
-Homebrew 6 refuses to load anything from a third-party tap until the tap is trusted, so `brew trust`
-comes before the install rather than after it fails.
-
-#### replacing the cask
-
-certreader was a cask until v0.24.0 and is a formula from v0.25.0. If you installed the cask, replace
-it once:
-
-```shell script
-brew uninstall --cask certreader
-brew install certreader
-```
-
-### linux
-
-```shell script
-curl -sL https://raw.githubusercontent.com/jonhadfield/certreader/main/install | sh
-```
-
-This works out the latest release, downloads the archive for the machine it is run on, checks it
-against the sums published beside it, and installs to `/usr/local/bin`. The directory is created if
-it is not there, and `sudo` is used only if it cannot be written to otherwise. A download that does
-not match its checksum is refused, and nothing is installed. It reads three optional variables:
-
-| variable | |
-| --- | --- |
-| `CERTREADER_VERSION` | a tag to install, e.g. `v0.25.1`. Default: the latest release |
-| `CERTREADER_INSTALL_DIR` | where to put the binary. Default: `/usr/local/bin` |
-| `GITHUB_URL` | for a mirror or an enterprise host |
-
-```shell script
-curl -sL https://raw.githubusercontent.com/jonhadfield/certreader/main/install | CERTREADER_INSTALL_DIR=~/.local/bin sh
-```
-
-The variable goes on the `sh` at the end of the pipe, not on the `curl` at the front, which would set
-it for the download instead of for the script.
-
-amd64 and arm64 are built; anything else is refused with a message rather than a failed download. The
-script runs on macOS too, though `brew` is the supported route there.
-
-### go
-
-[go](https://golang.org/dl/) has to be installed.
- - build `make build`
- - install `make install`
-
-## corpus check
-
-`make test` compares known certificates against known output, which covers the cases somebody
-thought to write down. `make corpus` asks a different question — one that has to hold for *any*
-certificate — and puts it to every certificate in the machine's trust store:
-
-- the output is text a terminal can print, with no raw bytes in it
-- `-json` produces a document that parses
-
-```shell script
-make corpus
-scripts/corpus-check.sh some-bundle.pem      # and anything else you have
-```
-
-Certificates are copied to a temporary directory and removed on exit. Nothing is sent anywhere, and
-nothing is added to the repository.
-
-This is how a user notice held as a BMPString was found printing as raw UTF-16, NUL bytes and all:
-two certificates out of a few hundred, neither of which anyone would have thought to write a test
-for. That certificate is a fixture now, so `make test` covers it, and the same sweep runs over the
-fixtures on every test run.
-
-## release
-
-Releases are built and published with [GoReleaser](https://goreleaser.com) from a tagged commit.
-Pushing the tag is all that is needed — the `release` workflow builds every platform and uploads the
-artifacts to a single GitHub release, then updates the homebrew formula.
-
-```shell script
-git tag -a -m "add super cool feature" v1.0.0
-git push --follow-tags
-```
-
-### required secret
-
-Platform builds run in parallel, so a release takes about as long as its slowest target rather than
-the sum of all five. A prerelease tag (one containing a hyphen, such as `v1.0.0-rc1`) is published as
-a prerelease and does not update the homebrew formula.
-
-Release notes come from the annotated tag message, so write the tag with the notes you want.
-
-The workflow needs a `RELEASE_TOKEN` repository secret: a personal access token with `repo` scope on
-both `jonhadfield/certreader` and `jonhadfield/homebrew-certreader`. The token built into Actions
-cannot write to another repository, and the darwin build pushes the formula update to the tap.
-
-Without it the workflow stops at its preflight job and publishes nothing.
-
-Run the workflow manually from the Actions tab to check the secret and the GoReleaser configs
-without cutting a tag; a manual run stops after preflight.
-
-### why a formula and not a cask
-
-Homebrew marks what a **cask** installs with `com.apple.quarantine`, and gatekeeper kills a
-quarantined binary that carries no stapled notarization ticket. The command exits 137 and prints
-nothing, which reads like a broken build rather than a refused one:
-
-```shell script
-$ certreader -version
-$ echo $?
-137
-```
-
-A bare executable has nowhere to keep a ticket — `stapler` needs an app bundle, a disk image or an
-installer package — so signing and notarizing the binary does not settle it. On macOS 26.5 a binary
-signed with a Developer ID certificate and accepted by the notary service was still refused under
-quarantine, on every attempt within ten minutes of the ticket being issued.
-
-A **formula** is not quarantined, which is how every other Go command line tool in Homebrew arrives
-able to run. GoReleaser calls `brews` deprecated in favour of `homebrew_casks`; the cask is what
-certreader shipped as up to v0.24.0, and it did not run when installed, so the formula stays until
-there is something to staple a ticket to.
-
-### releasing by hand
-
-The same builds can be run locally, which is useful when debugging a release failure:
-
-```shell script
-GITHUB_TOKEN=$(gh auth token) make release
-```
-
-This needs Docker, a local `goreleaser`, and a clean working tree. Individual platforms can be built
-on their own, e.g. `make release-mac` or `make release-linux-arm64`. Both routes use the same make
-targets and the configs in `.goreleaser/`, building darwin on the host and linux/windows inside
-`goreleaser-cross` containers.
+This is the answer to "why did it say that": above, the certificate names no OCSP responder, which is
+why a CRL was read instead. A `reading` line with no `downloading` after it is a list already held,
+so a scan of many hosts behind one authority shows that it fetched the list once.
 
 ## examples
 
@@ -833,3 +745,96 @@ using certificates for different hosts: `certreader -server-name <host> <load-ba
 
 - linux `ls -d /etc/ssl/certs/* | grep '.pem' | xargs certreader -expiry`
 - mac `cat /etc/ssl/cert.pem | certreader -expiry`
+
+## development
+
+### build from source
+
+[go](https://golang.org/dl/) has to be installed.
+ - build `make build`
+ - install `make install`
+
+### corpus check
+
+`make test` compares known certificates against known output, which covers the cases somebody
+thought to write down. `make corpus` asks a different question — one that has to hold for *any*
+certificate — and puts it to every certificate in the machine's trust store:
+
+- the output is text a terminal can print, with no raw bytes in it
+- `-json` produces a document that parses
+
+```shell script
+make corpus
+scripts/corpus-check.sh some-bundle.pem      # and anything else you have
+```
+
+Certificates are copied to a temporary directory and removed on exit. Nothing is sent anywhere, and
+nothing is added to the repository.
+
+This is how a user notice held as a BMPString was found printing as raw UTF-16, NUL bytes and all:
+two certificates out of a few hundred, neither of which anyone would have thought to write a test
+for. That certificate is a fixture now, so `make test` covers it, and the same sweep runs over the
+fixtures on every test run.
+
+### release
+
+Releases are built and published with [GoReleaser](https://goreleaser.com) from a tagged commit.
+Pushing the tag is all that is needed — the `release` workflow builds every platform and uploads the
+artifacts to a single GitHub release, then updates the homebrew formula.
+
+```shell script
+git tag -a -m "add super cool feature" v1.0.0
+git push --follow-tags
+```
+
+#### required secret
+
+Platform builds run in parallel, so a release takes about as long as its slowest target rather than
+the sum of all five. A prerelease tag (one containing a hyphen, such as `v1.0.0-rc1`) is published as
+a prerelease and does not update the homebrew formula.
+
+Release notes come from the annotated tag message, so write the tag with the notes you want.
+
+The workflow needs a `RELEASE_TOKEN` repository secret: a personal access token with `repo` scope on
+both `jonhadfield/certreader` and `jonhadfield/homebrew-certreader`. The token built into Actions
+cannot write to another repository, and the darwin build pushes the formula update to the tap.
+
+Without it the workflow stops at its preflight job and publishes nothing.
+
+Run the workflow manually from the Actions tab to check the secret and the GoReleaser configs
+without cutting a tag; a manual run stops after preflight.
+
+#### why a formula and not a cask
+
+Homebrew marks what a **cask** installs with `com.apple.quarantine`, and gatekeeper kills a
+quarantined binary that carries no stapled notarization ticket. The command exits 137 and prints
+nothing, which reads like a broken build rather than a refused one:
+
+```shell script
+$ certreader -version
+$ echo $?
+137
+```
+
+A bare executable has nowhere to keep a ticket — `stapler` needs an app bundle, a disk image or an
+installer package — so signing and notarizing the binary does not settle it. On macOS 26.5 a binary
+signed with a Developer ID certificate and accepted by the notary service was still refused under
+quarantine, on every attempt within ten minutes of the ticket being issued.
+
+A **formula** is not quarantined, which is how every other Go command line tool in Homebrew arrives
+able to run. GoReleaser calls `brews` deprecated in favour of `homebrew_casks`; the cask is what
+certreader shipped as up to v0.24.0, and it did not run when installed, so the formula stays until
+there is something to staple a ticket to.
+
+#### releasing by hand
+
+The same builds can be run locally, which is useful when debugging a release failure:
+
+```shell script
+GITHUB_TOKEN=$(gh auth token) make release
+```
+
+This needs Docker, a local `goreleaser`, and a clean working tree. Individual platforms can be built
+on their own, e.g. `make release-mac` or `make release-linux-arm64`. Both routes use the same make
+targets and the configs in `.goreleaser/`, building darwin on the host and linux/windows inside
+`goreleaser-cross` containers.
