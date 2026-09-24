@@ -128,18 +128,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       -
-        # only the darwin target builds on the runner; the others build inside
-        # goreleaser-cross, which brings its own go
+        # nothing needs cgo, so every target cross-compiles on the runner with
+        # the go that go.mod names, and no C toolchain
         name: setup go
-        if: matrix.target == 'release-mac'
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
       -
-        # the linux and windows targets run goreleaser inside goreleaser-cross,
-        # only the darwin target needs it on the runner itself
         name: install goreleaser
-        if: matrix.target == 'release-mac'
         uses: goreleaser/goreleaser-action@v6
         with:
           install-only: true
@@ -148,12 +144,6 @@ jobs:
         run: make ${{ matrix.target }}
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-      -
-        # the linux and windows targets build as root inside the container, so
-        # the archives come back owned by root and unreadable to the next step
-        name: take ownership of the archives
-        if: matrix.target != 'release-mac'
-        run: sudo chown -R "$(id -u):$(id -g)" dist
       -
         # Says which workflow, from which commit, built these. A checksum
         # published beside the file it describes only shows the download was

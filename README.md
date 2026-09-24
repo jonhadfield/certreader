@@ -837,7 +837,10 @@ The same builds can be run locally, which is useful when debugging a release fai
 GITHUB_TOKEN=$(gh auth token) make release
 ```
 
-This needs Docker, a local `goreleaser`, and a clean working tree. Individual platforms can be built
-on their own, e.g. `make release-mac` or `make release-linux-arm64`. Both routes use the same make
-targets and the configs in `.goreleaser/`, building darwin on the host and linux/windows inside
-`goreleaser-cross` containers.
+This needs a local `goreleaser` and a clean working tree. Individual platforms can be built on their
+own, e.g. `make release-mac` or `make release-linux-arm64`. Both routes use the same make targets and
+the configs in `.goreleaser/`.
+
+Every build has `CGO_ENABLED=0`: nothing certreader uses needs C, so each platform cross-compiles on
+whatever machine runs it, with no C toolchain and no container. The linux binaries are static as a
+result, and run whatever C library the machine has.
