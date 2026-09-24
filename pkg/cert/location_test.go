@@ -2,8 +2,10 @@ package cert
 
 import (
 	"crypto/tls"
+	"io"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -90,4 +92,41 @@ func Test_nameFormat(t *testing.T) {
 		name := nameFormat("test name", tls.VersionTLS12)
 		assert.Equal(t, "test name TLS 1.2", name)
 	})
+}
+
+// A connection was never closed once its certificates were read, so every
+// socket stayed open until the program exited and -concurrency bounded how
+// many were being made at once but not how many were held.
+func TestLoadFromNetworkClosesTheConnection(t *testing.T) {
+	listener, err := tls.Listen("tcp", "127.0.0.1:0", newTestServerTLSConfig(t))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = listener.Close() })
+
+	closed := make(chan error, 1)
+	go func() {
+		conn, acceptErr := listener.Accept()
+		if acceptErr != nil {
+			closed <- acceptErr
+			return
+		}
+		defer conn.Close()
+		if handshakeErr := conn.(*tls.Conn).Handshake(); handshakeErr != nil {
+			closed <- handshakeErr
+			return
+		}
+		// the client sends nothing, so the read ends only when it hangs up
+		_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		_, readErr := conn.Read(make([]byte, 1))
+		closed <- readErr
+	}()
+
+	location := LoadFromNetwork(listener.Addr().String(), NetworkOptions{InsecureSkipVerify: true})
+	require.NoError(t, location.Error)
+
+	select {
+	case readErr := <-closed:
+		assert.ErrorIs(t, readErr, io.EOF, "the server should see the client hang up, not time out waiting")
+	case <-time.After(10 * time.Second):
+		t.Fatal("the server never finished reading")
+	}
 }
