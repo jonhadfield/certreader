@@ -750,6 +750,16 @@ using certificates for different hosts: `certreader -server-name <host> <load-ba
 - linux `ls -d /etc/ssl/certs/* | grep '.pem' | xargs certreader -expiry`
 - mac `cat /etc/ssl/cert.pem | certreader -expiry`
 
+### kubernetes secret
+
+A certificate held in a secret is base64 encoded under a key, usually `tls.crt` or `ca.crt`:
+
+```shell script
+kubectl get secret -n <namespace> <secret> -o jsonpath='{.data.tls\.crt}' | base64 -d | certreader
+```
+
+The dot in the key is escaped, since jsonpath would otherwise read it as a path separator.
+
 ## development
 
 ### build from source
