@@ -41,63 +41,23 @@ GITHUB_TOKEN ?= $(shell echo $$GITHUB_TOKEN)
 release: release-linux-amd64 release-linux-arm64 release-mac release-windows-amd64 release-windows-arm64
 	@echo "✅ All artifacts uploaded to the same GitHub release."
 
-# macOS (darwin/arm64) + Windows if you still want it here — adjust as needed
+# Nothing here needs cgo, so every platform cross-compiles on whatever machine
+# runs this, with no C toolchain and no container.
 release-mac:
-	@echo "🚀 Releasing darwin/arm64 on host..."
 	env -u GITLAB_TOKEN -u GITEA_TOKEN $(GORELEASER) release --clean --config .goreleaser/.goreleaser.darwin.yml
+
+release-linux-amd64:
+	env -u GITLAB_TOKEN -u GITEA_TOKEN $(GORELEASER) release --clean --config .goreleaser/.goreleaser.linux-amd64.yml
+
+release-linux-arm64:
+	env -u GITLAB_TOKEN -u GITEA_TOKEN $(GORELEASER) release --clean --config .goreleaser/.goreleaser.linux-arm64.yml
+
+release-windows-amd64:
+	env -u GITLAB_TOKEN -u GITEA_TOKEN $(GORELEASER) release --clean --config .goreleaser/.goreleaser.windows-amd64.yml
+
+release-windows-arm64:
+	env -u GITLAB_TOKEN -u GITEA_TOKEN $(GORELEASER) release --clean --config .goreleaser/.goreleaser.windows-arm64.yml
 
 ifndef GITHUB_TOKEN
 $(error GITHUB_TOKEN is not set. Run: export GITHUB_TOKEN=<your PAT with repo scope>)
 endif
-
-release-linux-amd64:
-	@echo "🐧 Building linux/amd64 in container (goreleaser-cross)..."
-	docker run --rm --platform=linux/amd64 \
-	  --entrypoint /bin/sh \
-	  -e GITHUB_TOKEN=$(GITHUB_TOKEN) \
-	  -v "$$(pwd)":/src -w /src ghcr.io/goreleaser/goreleaser-cross:latest \
-	  -c '\
-	    set -eu ; \
-	    git config --global --add safe.directory /src ; \
-	    apt-get update && apt-get install -y --no-install-recommends libx11-dev pkg-config && \
-	    goreleaser release --clean --config .goreleaser/.goreleaser.linux-amd64.yml \
-	  '
-
-release-linux-arm64:
-	@echo "🐧 Building linux/arm64 in container (goreleaser-cross)..."
-	docker run --rm --platform=linux/arm64 \
-	  --entrypoint /bin/sh \
-	  -e GITHUB_TOKEN=$(GITHUB_TOKEN) \
-	  -v "$$(pwd)":/src -w /src ghcr.io/goreleaser/goreleaser-cross:latest \
-	  -c '\
-	    set -eu ; \
-	    git config --global --add safe.directory /src ; \
-	    apt-get update && apt-get install -y --no-install-recommends libx11-dev pkg-config && \
-	    goreleaser release --clean --config .goreleaser/.goreleaser.linux-arm64.yml \
-	  '
-
-release-windows-amd64:
-	@echo "🪟 Building windows/amd64 in container (goreleaser-cross)..."
-	docker run --rm --platform=linux/amd64 \
-	  --entrypoint /bin/sh \
-	  -e GITHUB_TOKEN=$(GITHUB_TOKEN) \
-	  -v "$$(pwd)":/src -w /src ghcr.io/goreleaser/goreleaser-cross:latest \
-	  -c '\
-	    set -eu ; \
-	    git config --global --add safe.directory /src ; \
-	    apt-get update && apt-get install -y --no-install-recommends libx11-dev pkg-config && \
-	    goreleaser release --clean --config .goreleaser/.goreleaser.windows-amd64.yml \
-	  '
-
-release-windows-arm64:
-	@echo "🪟 Building windows/arm64 in container (goreleaser-cross)..."
-	docker run --rm --platform=linux/arm64 \
-	  --entrypoint /bin/sh \
-	  -e GITHUB_TOKEN=$(GITHUB_TOKEN) \
-	  -v "$$(pwd)":/src -w /src ghcr.io/goreleaser/goreleaser-cross:latest \
-	  -c '\
-	    set -eu ; \
-	    git config --global --add safe.directory /src ; \
-	    apt-get update && apt-get install -y --no-install-recommends libx11-dev pkg-config && \
-	    goreleaser release --clean --config .goreleaser/.goreleaser.windows-arm64.yml \
-	  '
