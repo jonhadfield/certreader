@@ -45,19 +45,63 @@ def clean(path):
         lines.pop()
     return lines
 
-def render(panels, out_path):
+INDENT = 2
+
+def breaks(text, cols):
+    """Where to end each line of text no wider than cols: at the last space
+    that fits, so words are kept whole, or at the edge for a word that is
+    longer. Lines after the first are indented, so have less room."""
+    ends, begin, room = [], 0, cols
+    while len(text) - begin > room:
+        cut = text.rfind(" ", begin + 1, begin + room + 1)
+        cut = cut + 1 if cut > begin else begin + room
+        ends.append(cut)
+        begin, room = cut, cols - INDENT
+    return ends + [len(text)]
+
+def wrap(line, cols):
+    """Split a line of output into lines of at most cols characters, keeping
+    each piece's colour."""
+    pieces = runs(line)
+    plain = "".join(t for t, _, _ in pieces)
+    rows, begin = [], 0
+    for end in breaks(plain, cols):
+        row, pos = [], 0
+        for text, colour, bold in pieces:
+            lo, hi = max(begin, pos), min(end, pos + len(text))
+            if lo < hi:
+                row.append((text[lo - pos:hi - pos].rstrip(" ") if hi == end else text[lo - pos:hi - pos], colour, bold))
+            pos += len(text)
+        rows.append([r for r in row if r[0]])
+        begin = end
+    # a continuation is indented so each line of output starts at the edge
+    return rows[:1] + [[(" " * INDENT, FG, False)] + row for row in rows[1:]]
+
+def render(panels, out_path, cols=None):
     rows = []
     for command, path in panels:
         if rows:
             rows.append(None)
-        rows.append(("prompt", command))
-        for line in clean(path):
-            rows.append(("out", line))
+        if cols:
+            # the prompt takes two columns of the first line
+            ends = breaks("$ " + command, cols)
+            lines = [("$ " + command)[b:e].rstrip(" ") for b, e in zip([0] + ends, ends)]
+            rows.append(("prompt", lines[0][2:]))
+            rows.extend(("command", " " * INDENT + line) for line in lines[1:])
+            for line in clean(path):
+                rows.extend(("runs", r) for r in wrap(line, cols))
+        else:
+            rows.append(("prompt", command))
+            for line in clean(path):
+                rows.append(("runs", runs(line)))
 
-    width_cells = max(
-        (len(re.sub(r"\x1b\[[0-9;]*m", "", text)) + (2 if kind == "prompt" else 0))
-        for row in rows if row for kind, text in [row]
-    )
+    if cols:
+        width_cells = cols
+    else:
+        width_cells = max(
+            (len(text) + 2) if kind == "prompt" else sum(len(t) for t, _, _ in text)
+            for row in rows if row for kind, text in [row]
+        )
     width = PAD_X * 2 + (width_cells + 2) * CHAR_W
     height = PAD_TOP + len(rows) * LINE_H + 18
 
@@ -85,10 +129,15 @@ def render(panels, out_path):
                 f'<tspan fill="{PROMPT}">$ </tspan>'
                 f'<tspan fill="{COMMAND}">{html.escape(text)}</tspan></text>'
             )
+        elif kind == "command":
+            svg.append(
+                f'<text x="{PAD_X:.0f}" y="{y:.0f}" xml:space="preserve">'
+                f'<tspan fill="{COMMAND}">{html.escape(text)}</tspan></text>'
+            )
         else:
             spans = []
             column = 0
-            for run, colour, bold in runs(text):
+            for run, colour, bold in text:
                 weight = ' font-weight="600"' if bold else ""
                 # each run is placed on the character grid and told how wide to
                 # be, so the columns line up whatever monospace font the reader
@@ -115,4 +164,6 @@ render(
         ("certreader request.csr", sys.argv[2]),
     ],
     sys.argv[3],
+    # a column count wraps the output to that width, for narrow screens
+    int(sys.argv[4]) if len(sys.argv) > 4 else None,
 )

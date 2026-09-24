@@ -8,7 +8,10 @@ monitoring.
 [![release](https://img.shields.io/github/v/release/jonhadfield/certreader)](https://github.com/jonhadfield/certreader/releases/latest)
 [![license](https://img.shields.io/github/license/jonhadfield/certreader)](LICENSE)
 
-![certreader reading two hosts and a certificate request](docs/screenshot.svg)
+<picture>
+  <source media="(max-width: 600px)" srcset="docs/screenshot-narrow.svg">
+  <img alt="certreader reading two hosts and a certificate request" src="docs/screenshot.svg">
+</picture>
 
 It is a fork of the excellent [certinfo](https://github.com/pete911/certinfo), adding:
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
-# Regenerate docs/screenshot.svg from what the tool actually prints.
+# Regenerate docs/screenshot.svg, and docs/screenshot-narrow.svg for phones,
+# from what the tool actually prints.
 #
 # The output is captured through a pty, so the colours in the image are the
 # ones certreader emits rather than a guess at them, and rendered onto a
@@ -24,3 +25,7 @@ script -q /dev/null "${work}/certreader" -expiry google.com:443 github.com:443 >
 ( cd "${work}" && script -q /dev/null ./certreader request.csr > panel2.txt 2>/dev/null </dev/null )
 
 python3 scripts/render-terminal-svg.py "${work}/panel1.txt" "${work}/panel2.txt" docs/screenshot.svg
+
+# the same capture wrapped as a 40 column terminal would show it, which a
+# phone can show at a size that can be read
+python3 scripts/render-terminal-svg.py "${work}/panel1.txt" "${work}/panel2.txt" docs/screenshot-narrow.svg 40
