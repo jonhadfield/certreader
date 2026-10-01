@@ -5,7 +5,7 @@ go 1.27.1
 require (
 	github.com/fatih/color v1.19.0
 	github.com/stretchr/testify v1.12.1
-	golang.design/x/clipboard v0.9.0
+	golang.design/x/clipboard v0.11.0
 	golang.org/x/crypto v0.57.0
 	golang.org/x/term v0.46.0
 	software.sslmate.com/src/go-pkcs12 v0.7.3
