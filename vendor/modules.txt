@@ -24,7 +24,7 @@ github.com/stretchr/testify/require
 # go.yaml.in/yaml/v3 v3.0.5
 ## explicit; go 1.16
 go.yaml.in/yaml/v3
-# golang.design/x/clipboard v0.9.0
+# golang.design/x/clipboard v0.11.0
 ## explicit; go 1.24
 golang.design/x/clipboard
 # golang.design/x/x11 v0.2.0
