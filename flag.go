@@ -86,7 +86,7 @@ func ParseFlags() (Flags, error) {
 	flagSet.StringVar(&flags.TimeoutRaw, "timeout", getStringEnv("CERTREADER_TIMEOUT", defaultTimeout.String()),
 		"how long to wait for a connection, and proportionally longer for revocation requests")
 	flagSet.BoolVar(&flags.Insecure, "insecure", getBoolEnv("CERTREADER_INSECURE", false),
-		"whether a client verifies the server's certificate chain and host name (only applicable for host)")
+		"skip verification of an https proxy; target certificates are always read, even when they would not be trusted")
 	flagSet.BoolVar(&flags.Revocation, "revocation", getBoolEnv("CERTREADER_REVOCATION", false),
 		"check revocation status via OCSP, falling back to CRL (makes network requests)")
 	flagSet.IntVar(&flags.Concurrency, "concurrency", getIntEnv("CERTREADER_CONCURRENCY", defaultConcurrency),

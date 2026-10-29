@@ -245,10 +245,11 @@ func (l Location) leafAndIssuer() (leaf, issuer *x509.Certificate) {
 // NetworkOptions configures how a network location is read. The zero value is
 // usable and applies the defaults.
 type NetworkOptions struct {
-	// ServerName overrides the name verified against the certificate, and sent
-	// as SNI, which is otherwise taken from the address.
+	// ServerName overrides the name sent as SNI, which is otherwise taken from
+	// the address. It is also the hostname used when the location is verified.
 	ServerName string
-	// InsecureSkipVerify accepts a certificate that does not verify.
+	// InsecureSkipVerify skips verification of an https proxy. The target
+	// handshake always skips it: the certificates are being read, not trusted.
 	InsecureSkipVerify bool
 	// StartTLS upgrades a plaintext connection rather than handshaking
 	// immediately.
@@ -281,7 +282,10 @@ func (o NetworkOptions) timeout() time.Duration {
 func LoadFromNetwork(addr string, opts NetworkOptions) Location {
 
 	config := &tls.Config{
-		InsecureSkipVerify: opts.InsecureSkipVerify,
+		// The handshake is how the certificates are read, so it has to complete
+		// even when they would not be trusted. An expired certificate is still
+		// the one the server is serving.
+		InsecureSkipVerify: true,
 		ServerName:         opts.ServerName,
 	}
 
@@ -301,9 +305,9 @@ func LoadFromNetwork(addr string, opts NetworkOptions) Location {
 	var conn *tls.Conn
 	switch {
 	case opts.StartTLS != StartTLSNone:
-		conn, err = dialStartTLS(addr, config, opts.StartTLS, opts.timeout(), proxy)
+		conn, err = dialStartTLS(addr, config, opts.StartTLS, opts.timeout(), proxy, opts.InsecureSkipVerify)
 	case proxy != nil:
-		conn, err = dialThroughProxy(addr, config, opts.timeout(), proxy)
+		conn, err = dialThroughProxy(addr, config, opts.timeout(), proxy, opts.InsecureSkipVerify)
 	default:
 		conn, err = tls.DialWithDialer(&net.Dialer{Timeout: opts.timeout()}, "tcp", addr, config)
 	}
@@ -340,9 +344,9 @@ func LoadFromNetwork(addr string, opts NetworkOptions) Location {
 // dialStartTLS connects in plaintext, asks the server to begin TLS, and then
 // completes the handshake over the same connection. A non nil proxy is
 // tunnelled through first, so the plaintext exchange is with the target.
-func dialStartTLS(addr string, config *tls.Config, protocol StartTLSProtocol, timeout time.Duration, proxy *url.URL) (*tls.Conn, error) {
+func dialStartTLS(addr string, config *tls.Config, protocol StartTLSProtocol, timeout time.Duration, proxy *url.URL, insecureProxy bool) (*tls.Conn, error) {
 
-	raw, err := dialRaw(addr, config, proxy, timeout)
+	raw, err := dialRaw(addr, proxy, timeout, insecureProxy)
 	if err != nil {
 		return nil, err
 	}
@@ -373,9 +377,9 @@ func dialStartTLS(addr string, config *tls.Config, protocol StartTLSProtocol, ti
 // dialThroughProxy reaches the target through an http proxy and handshakes with
 // it over the tunnel, which is what a direct tls.Dial would have done over a
 // socket of its own.
-func dialThroughProxy(addr string, config *tls.Config, timeout time.Duration, proxy *url.URL) (*tls.Conn, error) {
+func dialThroughProxy(addr string, config *tls.Config, timeout time.Duration, proxy *url.URL, insecureProxy bool) (*tls.Conn, error) {
 
-	raw, err := dialRaw(addr, config, proxy, timeout)
+	raw, err := dialRaw(addr, proxy, timeout, insecureProxy)
 	if err != nil {
 		return nil, err
 	}
@@ -398,11 +402,11 @@ func dialThroughProxy(addr string, config *tls.Config, timeout time.Duration, pr
 
 // dialRaw opens the connection the handshake will run over, tunnelling through
 // the proxy when one was named.
-func dialRaw(addr string, config *tls.Config, proxy *url.URL, timeout time.Duration) (net.Conn, error) {
+func dialRaw(addr string, proxy *url.URL, timeout time.Duration, insecureProxy bool) (net.Conn, error) {
 	if proxy == nil {
 		return net.DialTimeout("tcp", addr, timeout)
 	}
-	return dialProxyTunnel(addr, proxy, timeout, config.InsecureSkipVerify)
+	return dialProxyTunnel(addr, proxy, timeout, insecureProxy)
 }
 
 // clientHandshake completes the tls handshake over a connection that is already

@@ -127,7 +127,7 @@ certreader [flags] [<file>|<host:port>|<https://host[:port]> ...]
 - `-fail-on-warning` — exit non-zero if any certificate or chain warning is reported
 - `-fingerprint` — print the sha-256 of the certificate and of its public key
 - `-follow-redirects` — allow a revocation or issuer request to be redirected away from the address the certificate named
-- `-insecure` — whether a client verifies the server's certificate chain and host name (only applicable for host)
+- `-insecure` — skip verification of an https proxy (target certificates are always read, even when they would not be trusted)
 - `-issuer-like` — print certificates with issuer field containing supplied string
 - `-json` — output as json (takes precedence over -expiry and -pem-only)
 - `-more` — use a combination of the '-pem -signature -chains' flags
@@ -567,9 +567,10 @@ NO_PROXY=.internal.example.com,10.0.0.0/8 certreader host.internal.example.com:4
 ```
 
 An `https://` proxy is spoken to over TLS, so the `CONNECT` exchange is itself encrypted; the tunnel
-it opens still carries a separate handshake with the target. `-insecure` then applies to that hop as
-well, since it is the same instruction not to verify, one hop earlier. A `socks5://` or other scheme
-is rejected rather than ignored.
+it opens still carries a separate handshake with the target. The target's certificates are always
+read, even when they would not be trusted — inspecting an expired or untrusted host is the usual
+reason to point the tool at it. `-insecure` skips verification of the proxy hop itself. A
+`socks5://` or other scheme is rejected rather than ignored.
 
 `-starttls` is tunnelled the same way, so the plaintext negotiation is with the target and not with
 the proxy.
@@ -595,7 +596,7 @@ The same bound applies to revocation checks. Each check can make several request
 counts conversations in flight rather than sockets.
 
 If you need to run against multiple hosts, it is faster to execute command with multiple arguments e.g.
-`certreader -insecure -expiry google.com:443 amazon.com:443 ...` rather than executing command multiple times. Args are
+`certreader -expiry google.com:443 amazon.com:443 ...` rather than executing command multiple times. Args are
 executed concurrently and much faster.
 
 ## verbose

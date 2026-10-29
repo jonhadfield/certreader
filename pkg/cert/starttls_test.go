@@ -46,6 +46,35 @@ func newTestServerTLSConfig(t *testing.T) *tls.Config {
 	}}}
 }
 
+// expiredTestServerTLSConfig is a server whose certificate has already lapsed.
+// LoadFromNetwork has to return that certificate rather than only the
+// verification error, because inspecting an expired host is the usual reason
+// someone pointed the tool at it.
+func expiredTestServerTLSConfig(t *testing.T) *tls.Config {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "expired.example.test"},
+		DNSNames:              []string{"localhost"},
+		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
+		NotBefore:             time.Now().Add(-48 * time.Hour),
+		NotAfter:              time.Now().Add(-time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		BasicConstraintsValid: true,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, key.Public(), key)
+	require.NoError(t, err)
+
+	return &tls.Config{Certificates: []tls.Certificate{{
+		Certificate: [][]byte{der},
+		PrivateKey:  key,
+	}}}
+}
+
 // startPlaintextServer accepts one connection, runs the given plaintext
 // exchange, and then serves TLS over the same connection.
 func startPlaintextServer(t *testing.T, exchange func(t *testing.T, conn net.Conn) bool) string {

@@ -154,8 +154,9 @@ func useProxy(addr string, noProxy string) bool {
 // is asked for with CONNECT, so that the handshake, and the certificates it
 // carries, are the target's own rather than the proxy's.
 //
-// insecure applies to the connection to an https proxy, not to the target: it
-// is the same instruction not to verify, followed one hop earlier.
+// insecure applies to the connection to an https proxy, not to the target.
+// The target handshake always skips verification so the certificates can be
+// read even when they would not be trusted.
 func dialProxyTunnel(addr string, proxy *url.URL, timeout time.Duration, insecure bool) (net.Conn, error) {
 
 	proxyAddr := proxyAddress(proxy)

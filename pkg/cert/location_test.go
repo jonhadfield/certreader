@@ -130,3 +130,26 @@ func TestLoadFromNetworkClosesTheConnection(t *testing.T) {
 		t.Fatal("the server never finished reading")
 	}
 }
+
+// Handshake verification used to abort before the peer certificates were kept,
+// so an expired host printed only the error. The certificates are what was
+// asked for: they have to come back even when they would not be trusted.
+func TestLoadFromNetworkReadsAnExpiredCertificate(t *testing.T) {
+	listener, err := tls.Listen("tcp", "127.0.0.1:0", expiredTestServerTLSConfig(t))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = listener.Close() })
+
+	go func() {
+		conn, acceptErr := listener.Accept()
+		if acceptErr != nil {
+			return
+		}
+		defer conn.Close()
+		_ = conn.(*tls.Conn).Handshake()
+	}()
+
+	location := LoadFromNetwork(listener.Addr().String(), NetworkOptions{})
+	require.NoError(t, location.Error)
+	require.Len(t, location.Certificates, 1)
+	assert.True(t, location.Certificates[0].IsExpired())
+}
