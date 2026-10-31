@@ -120,7 +120,6 @@ certreader [flags] [<file>|<host:port>|<https://host[:port]> ...]
 - `-clipboard` — read input from clipboard (only if the clipboard is supported)
 - `-compare` — compare two locations and report whether they serve the same certificate
 - `-concurrency` — how many locations to read at once, 0 for no limit (default 100)
-- `-csr` — force CSR mode (CSRs are auto-detected, so this is optional)
 - `-expiring-within` — exit non-zero if any certificate expires within this window, e.g. 30d, 2w, 72h
 - `-expiry` — print expiry of certificates
 - `-extensions` — whether to print extensions

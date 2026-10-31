@@ -140,6 +140,16 @@ func TestFilterFlagDescriptions(t *testing.T) {
 	})
 }
 
+func TestCsrFlagIsRetired(t *testing.T) {
+	// CSRs are auto-detected, and the flag was never read. Leaving it in the
+	// help implied there was a mode it no longer selected.
+	setInput(t, nil, nil)
+	flags, err := ParseFlags()
+	require.NoError(t, err)
+	usage := captureStderr(t, flags.Usage)
+	assert.NotContains(t, usage, "-csr")
+}
+
 // --- helper functions ---
 
 // captureStderr collects what a function writes to stderr, which is where the
