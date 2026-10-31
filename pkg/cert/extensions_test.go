@@ -1,9 +1,17 @@
 package cert
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
+	"math/big"
+	"net"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -171,6 +179,7 @@ func TestExtensionsByOid(t *testing.T) {
 			"2.5.29.32",               // Certificate Policies
 			"2.5.29.17",               // Subject Alt Name
 			"2.5.29.19",               // Basic Constraints
+			"2.5.29.30",               // Name Constraints
 			"2.5.29.37",               // Extended Key Usage
 			"2.5.29.31",               // CRL Distribution Points
 			"1.3.6.1.5.5.7.1.1",       // Authority Information Access
@@ -183,4 +192,59 @@ func TestExtensionsByOid(t *testing.T) {
 			assert.NotNil(t, handler, "Handler for OID %s should not be nil", oid)
 		}
 	})
+}
+
+func TestNameConstraintsAreParsed(t *testing.T) {
+	// A CA that names who it will issue for used to print -N/A- and the OID.
+	// The constraints are the reason to look at the extension.
+	certificate := nameConstraintsCertificate(t)
+
+	var found Extension
+	for _, extension := range certificate.Extensions() {
+		if extension.Oid == "2.5.29.30" {
+			found = extension
+			break
+		}
+	}
+	require.Equal(t, "Name Constraints", found.Name)
+	joined := strings.Join(found.Values, "\n")
+	assert.Contains(t, joined, "Permitted")
+	assert.Contains(t, joined, "example.com")
+	assert.Contains(t, joined, "Excluded")
+	assert.Contains(t, joined, "evil.example.com")
+	assert.Contains(t, joined, "10.0.0.0")
+}
+
+func TestParseNameConstraintsInvalid(t *testing.T) {
+	name, _, err := parseNameConstraints([]byte{0xFF, 0xFF})
+	require.Error(t, err)
+	assert.Equal(t, "Name Constraints", name)
+}
+
+func nameConstraintsCertificate(t *testing.T) Certificate {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "constraints test CA"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign,
+		PermittedDNSDomains:   []string{".example.com", "example.com"},
+		ExcludedDNSDomains:    []string{".evil.example.com"},
+		PermittedIPRanges: []*net.IPNet{{
+			IP:   net.IPv4(10, 0, 0, 0),
+			Mask: net.CIDRMask(8, 32),
+		}},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, key.Public(), key)
+	require.NoError(t, err)
+	parsed, err := x509.ParseCertificate(der)
+	require.NoError(t, err)
+	return Certificate{position: 1, x509Certificate: parsed}
 }

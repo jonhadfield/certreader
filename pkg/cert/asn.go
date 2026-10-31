@@ -102,6 +102,76 @@ func ToGeneralNames(in []byte) ([]string, error) {
 	return namesSlice, nil
 }
 
+// NameConstraints ::= SEQUENCE {
+//
+//	permittedSubtrees       [0]     GeneralSubtrees OPTIONAL,
+//	excludedSubtrees        [1]     GeneralSubtrees OPTIONAL }
+//
+// GeneralSubtrees ::= SEQUENCE SIZE (1..MAX) OF GeneralSubtree
+//
+// GeneralSubtree ::= SEQUENCE {
+//
+//	base                    GeneralName,
+//	minimum         [0]     BaseDistance DEFAULT 0,
+//	maximum         [1]     BaseDistance OPTIONAL }
+func ToNameConstraints(in []byte) ([]string, error) {
+
+	var constraints struct {
+		Permitted asn1.RawValue `asn1:"optional,tag:0"`
+		Excluded  asn1.RawValue `asn1:"optional,tag:1"`
+	}
+	if _, err := asn1.Unmarshal(in, &constraints); err != nil {
+		return nil, err
+	}
+
+	var out []string
+	if permitted, err := toGeneralSubtrees(constraints.Permitted.Bytes); err != nil {
+		return nil, err
+	} else if len(permitted) > 0 {
+		out = append(out, "Permitted:")
+		for _, name := range permitted {
+			out = append(out, "    "+name)
+		}
+	}
+	if excluded, err := toGeneralSubtrees(constraints.Excluded.Bytes); err != nil {
+		return nil, err
+	} else if len(excluded) > 0 {
+		out = append(out, "Excluded:")
+		for _, name := range excluded {
+			out = append(out, "    "+name)
+		}
+	}
+	return out, nil
+}
+
+func toGeneralSubtrees(in []byte) ([]string, error) {
+
+	if len(in) == 0 {
+		return nil, nil
+	}
+
+	var out []string
+	for len(in) > 0 {
+		var subtree struct {
+			Base    asn1.RawValue
+			Minimum int `asn1:"optional,tag:0,default:0"`
+			Maximum int `asn1:"optional,tag:1"`
+		}
+		rest, err := asn1.Unmarshal(in, &subtree)
+		if err != nil {
+			return nil, err
+		}
+		name := toGeneralName(subtree.Base)
+		line := fmt.Sprintf("%s: %s", name.Type, name.Value)
+		if subtree.Maximum != 0 {
+			line += fmt.Sprintf(" (min %d, max %d)", subtree.Minimum, subtree.Maximum)
+		}
+		out = append(out, line)
+		in = rest
+	}
+	return out, nil
+}
+
 // CRLDistributionPoints ::= SEQUENCE SIZE (1..MAX) OF DistributionPoint
 
 // DistributionPoint ::= SEQUENCE {
