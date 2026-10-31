@@ -14,8 +14,8 @@ const (
 	// exitLoadError means at least one location could not be read, so its
 	// status is unknown rather than good.
 	exitLoadError = 1
-	// exitCheckFailed means a certificate was found revoked, or falls due
-	// inside the -expiring-within window.
+	// exitCheckFailed means a certificate was found revoked, fails -verify,
+	// or falls due inside the -expiring-within window.
 	exitCheckFailed = 2
 )
 
@@ -37,6 +37,9 @@ func exitStatus(locations cert.Locations, flags Flags) int {
 		}
 		// nil when no check was requested, and nil-safe
 		if location.Revocation.IsRevoked() {
+			return exitCheckFailed
+		}
+		if location.Verification != nil && !location.Verification.OK {
 			return exitCheckFailed
 		}
 		if flags.ExpiringWithin != "" && expiresWithin(location, flags.ExpiringWindow) {

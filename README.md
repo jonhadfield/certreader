@@ -157,7 +157,8 @@ overridden with a flag.
 ## verify
 
 `-verify` checks the certificate against the system trust store, and against the hostname when the
-certificate came from the network, and says why it failed rather than only that it did.
+certificate came from the network, and says why it failed rather than only that it did. A failure
+is a failed check and exits `2`, the same as a revoked certificate.
 
 ```shell script
 certreader -verify example.com:443
@@ -264,14 +265,15 @@ policy decision, and changing what an existing `-expiring-within` check returns 
 way to make it.
 
 `-fail-on-warning` opts in: any warning then counts as a failed check and exits `2`, alongside
-revoked and expiring certificates.
+revoked certificates, a failed `-verify`, and those expiring within the window.
 
 ```shell script
 certreader -verify -fail-on-warning example.com:443 || echo "needs attention"
 ```
 
-Chain warnings are only worked out by `-verify`, so `-fail-on-warning` without it considers the
-certificates alone.
+`-verify` itself fails the check when the chain does not verify. `-fail-on-warning` is what also
+fails on chain hygiene (a root served, duplicates, order) and on weak certificates. Chain warnings
+are only worked out by `-verify`, so `-fail-on-warning` without it considers the certificates alone.
 
 ## revocation
 
@@ -510,14 +512,15 @@ Field names are part of the interface and will be added to rather than renamed.
 |------|---------|
 | 0 | everything read, and any checks asked for passed |
 | 1 | a location could not be read, so its status is unknown rather than good |
-| 2 | a check failed: a certificate is revoked, or expires within `-expiring-within` |
+| 2 | a check failed: a certificate is revoked, `-verify` did not pass, or it expires within `-expiring-within` |
 
-Checks are opt-in. Without `-revocation` nothing is known about revocation, and without
-`-expiring-within` an expired certificate is reported but not treated as a failure — inspecting an
-expired certificate is a normal thing to want to do.
+Checks are opt-in. Without `-revocation` nothing is known about revocation, without `-verify` a
+chain that would not be trusted is still printed, and without `-expiring-within` an expired
+certificate is reported but not treated as a failure — inspecting an expired certificate is a
+normal thing to want to do.
 
 ```shell script
-certreader -revocation -expiring-within 14d example.com:443 || echo "needs attention"
+certreader -verify -revocation -expiring-within 14d example.com:443 || echo "needs attention"
 ```
 
 `-expiring-within` accepts go duration syntax plus day and week suffixes: `30d`, `2w`, `72h`, `90m`.
