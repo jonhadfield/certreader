@@ -122,6 +122,29 @@ func TestExitStatus(t *testing.T) {
 		flags := Flags{ExpiringWithin: "7d", ExpiringWindow: 7 * 24 * time.Hour}
 		assert.Equal(t, exitCheckFailed, exitStatus(locations, flags))
 	})
+
+	t.Run("given verification failed then the check fails", func(t *testing.T) {
+		location := healthy(t)
+		location.Verification = &cert.VerificationResult{
+			Problems: []cert.VerificationProblem{{
+				Code:    cert.VerifyExpired,
+				Message: "expired on 2026-10-28T23:59:59Z",
+			}},
+		}
+		assert.Equal(t, exitCheckFailed, exitStatus(cert.Locations{location}, Flags{}))
+	})
+
+	t.Run("given verification succeeded then it succeeds", func(t *testing.T) {
+		location := healthy(t)
+		location.Verification = &cert.VerificationResult{OK: true, Chains: 1}
+		assert.Equal(t, exitOK, exitStatus(cert.Locations{location}, Flags{}))
+	})
+
+	t.Run("given verification was not requested then it is not a failed check", func(t *testing.T) {
+		location := healthy(t)
+		require.Nil(t, location.Verification)
+		assert.Equal(t, exitOK, exitStatus(cert.Locations{location}, Flags{}), "without -verify there is no result to fail on")
+	})
 }
 
 func Test_expiresWithin(t *testing.T) {
