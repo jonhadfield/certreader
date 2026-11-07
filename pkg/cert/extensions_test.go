@@ -178,6 +178,7 @@ func TestExtensionsByOid(t *testing.T) {
 			"2.5.29.15",               // Key Usage
 			"2.5.29.32",               // Certificate Policies
 			"2.5.29.17",               // Subject Alt Name
+			"2.5.29.18",               // Issuer Alternative Name
 			"2.5.29.19",               // Basic Constraints
 			"2.5.29.30",               // Name Constraints
 			"2.5.29.37",               // Extended Key Usage
@@ -221,6 +222,31 @@ func TestParseNameConstraintsInvalid(t *testing.T) {
 	assert.Equal(t, "Name Constraints", name)
 }
 
+func TestIssuerAlternativeNameIsParsed(t *testing.T) {
+	// Same encoding as subject alt name, so -N/A- for the issuer side was a
+	// gap rather than a hard case. The names are why someone looks.
+	certificate := issuerAlternativeNameCertificate(t)
+
+	var found Extension
+	for _, extension := range certificate.Extensions() {
+		if extension.Oid == "2.5.29.18" {
+			found = extension
+			break
+		}
+	}
+	require.Equal(t, "Issuer Alt. Name", found.Name)
+	joined := strings.Join(found.Values, "\n")
+	assert.Contains(t, joined, "DNS Name")
+	assert.Contains(t, joined, "issuer.example.com")
+	assert.NotContains(t, joined, "-N/A-")
+}
+
+func TestParseIssuerAlternativeNameInvalid(t *testing.T) {
+	name, _, err := parseIssuerAlternativeName([]byte{0xFF, 0xFF})
+	require.Error(t, err)
+	assert.Equal(t, "Issuer Alt. Name", name)
+}
+
 func nameConstraintsCertificate(t *testing.T) Certificate {
 	t.Helper()
 
@@ -240,6 +266,35 @@ func nameConstraintsCertificate(t *testing.T) Certificate {
 		PermittedIPRanges: []*net.IPNet{{
 			IP:   net.IPv4(10, 0, 0, 0),
 			Mask: net.CIDRMask(8, 32),
+		}},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, key.Public(), key)
+	require.NoError(t, err)
+	parsed, err := x509.ParseCertificate(der)
+	require.NoError(t, err)
+	return Certificate{position: 1, x509Certificate: parsed}
+}
+
+func issuerAlternativeNameCertificate(t *testing.T) Certificate {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	dns, err := asn1.MarshalWithParams("issuer.example.com", "tag:2,ia5")
+	require.NoError(t, err)
+	names, err := asn1.Marshal([]asn1.RawValue{{FullBytes: dns}})
+	require.NoError(t, err)
+
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "ian test"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(24 * time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtraExtensions: []pkix.Extension{{
+			Id:    asn1.ObjectIdentifier{2, 5, 29, 18},
+			Value: names,
 		}},
 	}
 	der, err := x509.CreateCertificate(rand.Reader, template, template, key.Public(), key)
