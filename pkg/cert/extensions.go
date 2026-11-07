@@ -28,7 +28,7 @@ var extensionsByOid = map[string]func(in []byte) (string, []string, error){
 	"2.5.29.32": parseCertificatePolicies,
 	//"2.5.29.33": parsePolicyMappings,
 	"2.5.29.17": parseSubjectAltName,
-	//"2.5.29.18": parseIssuerAlternativeName,
+	"2.5.29.18": parseIssuerAlternativeName,
 	//"2.5.29.9": parseSubjectDirectoryAttributes,
 	"2.5.29.19": parseBasicConstraints,
 	"2.5.29.30": parseNameConstraints,
@@ -108,6 +108,15 @@ func parseCertificatePolicies(in []byte) (string, []string, error) {
 
 func parseSubjectAltName(in []byte) (string, []string, error) {
 	name := "Subject Alt. Name"
+	out, err := ToGeneralNames(in)
+	if err != nil {
+		return name, nil, err
+	}
+	return name, out, nil
+}
+
+func parseIssuerAlternativeName(in []byte) (string, []string, error) {
+	name := "Issuer Alt. Name"
 	out, err := ToGeneralNames(in)
 	if err != nil {
 		return name, nil, err
