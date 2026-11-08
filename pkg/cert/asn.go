@@ -144,6 +144,34 @@ func ToNameConstraints(in []byte) ([]string, error) {
 	return out, nil
 }
 
+// PolicyConstraints ::= SEQUENCE {
+// requireExplicitPolicy           [0] SkipCerts OPTIONAL,
+// inhibitPolicyMapping            [1] SkipCerts OPTIONAL }
+//
+// SkipCerts ::= INTEGER (0..MAX)
+//
+// default:-1 marks a field absent; SkipCerts may be zero, so the Go zero
+// value cannot mean "not present".
+func ToPolicyConstraints(in []byte) ([]string, error) {
+
+	var constraints struct {
+		RequireExplicitPolicy int `asn1:"optional,tag:0,default:-1"`
+		InhibitPolicyMapping  int `asn1:"optional,tag:1,default:-1"`
+	}
+	if _, err := asn1.Unmarshal(in, &constraints); err != nil {
+		return nil, err
+	}
+
+	var out []string
+	if constraints.RequireExplicitPolicy != -1 {
+		out = append(out, fmt.Sprintf("Require Explicit Policy: %d", constraints.RequireExplicitPolicy))
+	}
+	if constraints.InhibitPolicyMapping != -1 {
+		out = append(out, fmt.Sprintf("Inhibit Policy Mapping: %d", constraints.InhibitPolicyMapping))
+	}
+	return out, nil
+}
+
 func toGeneralSubtrees(in []byte) ([]string, error) {
 
 	if len(in) == 0 {
