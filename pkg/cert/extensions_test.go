@@ -124,6 +124,31 @@ func TestParseExtendedKeyUsage(t *testing.T) {
 		require.Error(t, err)
 		assert.Equal(t, "Extended Key Usage", name)
 	})
+
+	t.Run("given known and unknown key purposes, when parseExtendedKeyUsage called, then names and oids are shown", func(t *testing.T) {
+		value, err := asn1.Marshal([]asn1.ObjectIdentifier{
+			{1, 3, 6, 1, 5, 5, 7, 3, 1},
+			{1, 2, 3, 4},
+		})
+		require.NoError(t, err)
+
+		name, values, err := parseExtendedKeyUsage(value)
+		require.NoError(t, err)
+		assert.Equal(t, "Extended Key Usage", name)
+		require.Len(t, values, 2)
+		assert.Equal(t, "server auth (1.3.6.1.5.5.7.3.1)", values[0])
+		assert.Equal(t, "1.2.3.4", values[1])
+	})
+}
+
+func TestToExtendedKeyUsageFromFixture(t *testing.T) {
+	// sct.pem carries TLS web server authentication; the friendly name is
+	// what someone reading -extensions is after.
+	usages, err := ToExtendedKeyUsage(extensionValue(t, "sct.pem", "2.5.29.37"))
+	require.NoError(t, err)
+	require.NotEmpty(t, usages)
+	assert.Contains(t, usages[0], "server auth")
+	assert.Contains(t, usages[0], "1.3.6.1.5.5.7.3.1")
 }
 
 func TestParseSubjectAltName(t *testing.T) {
