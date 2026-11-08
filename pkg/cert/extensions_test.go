@@ -181,6 +181,7 @@ func TestExtensionsByOid(t *testing.T) {
 			"2.5.29.18",               // Issuer Alternative Name
 			"2.5.29.19",               // Basic Constraints
 			"2.5.29.30",               // Name Constraints
+			"2.5.29.36",               // Policy Constraints
 			"2.5.29.37",               // Extended Key Usage
 			"2.5.29.31",               // CRL Distribution Points
 			"1.3.6.1.5.5.7.1.1",       // Authority Information Access
@@ -247,6 +248,31 @@ func TestParseIssuerAlternativeNameInvalid(t *testing.T) {
 	assert.Equal(t, "Issuer Alt. Name", name)
 }
 
+func TestPolicyConstraintsAreParsed(t *testing.T) {
+	// A CA stating how many certificates may follow before policies must be
+	// explicit used to print -N/A- and the OID. The skip counts are the point.
+	certificate := policyConstraintsCertificate(t)
+
+	var found Extension
+	for _, extension := range certificate.Extensions() {
+		if extension.Oid == "2.5.29.36" {
+			found = extension
+			break
+		}
+	}
+	require.Equal(t, "Policy Constraints", found.Name)
+	joined := strings.Join(found.Values, "\n")
+	assert.Contains(t, joined, "Require Explicit Policy: 0")
+	assert.Contains(t, joined, "Inhibit Policy Mapping: 2")
+	assert.NotContains(t, joined, "-N/A-")
+}
+
+func TestParsePolicyConstraintsInvalid(t *testing.T) {
+	name, _, err := parsePolicyConstraints([]byte{0xFF, 0xFF})
+	require.Error(t, err)
+	assert.Equal(t, "Policy Constraints", name)
+}
+
 func nameConstraintsCertificate(t *testing.T) Certificate {
 	t.Helper()
 
@@ -295,6 +321,41 @@ func issuerAlternativeNameCertificate(t *testing.T) Certificate {
 		ExtraExtensions: []pkix.Extension{{
 			Id:    asn1.ObjectIdentifier{2, 5, 29, 18},
 			Value: names,
+		}},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, key.Public(), key)
+	require.NoError(t, err)
+	parsed, err := x509.ParseCertificate(der)
+	require.NoError(t, err)
+	return Certificate{position: 1, x509Certificate: parsed}
+}
+
+func policyConstraintsCertificate(t *testing.T) Certificate {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	value, err := asn1.Marshal(struct {
+		RequireExplicitPolicy int `asn1:"tag:0"`
+		InhibitPolicyMapping  int `asn1:"tag:1"`
+	}{
+		RequireExplicitPolicy: 0,
+		InhibitPolicyMapping:  2,
+	})
+	require.NoError(t, err)
+
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "policy constraints test CA"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign,
+		ExtraExtensions: []pkix.Extension{{
+			Id:    asn1.ObjectIdentifier{2, 5, 29, 36},
+			Value: value,
 		}},
 	}
 	der, err := x509.CreateCertificate(rand.Reader, template, template, key.Public(), key)
